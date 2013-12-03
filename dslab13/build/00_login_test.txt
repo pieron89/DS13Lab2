@@ -1,0 +1,16 @@
+*	startProxy proxy
+*	startClient client
+*	startClient client2
+*	startFileServer fs1
+
+client:	!login alice 12345
+client:	!credits
+client2: !login bill 23456
+client2: !credits
+client2: !buy 300
+client2: !credits
+proxy:	!users
+
+proxy:	!exit
+client:	!exit
+fs1:	!exit
