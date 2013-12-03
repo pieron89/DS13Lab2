@@ -37,6 +37,7 @@ import message.response.MessageResponse;
 public class Client implements Runnable,IClientCli{
 
 	//config and shell for client
+	//und dis ist ein test
 	Config clientConfig;
 	Shell clientShell;
 	Thread shellThread;
