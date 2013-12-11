@@ -206,9 +206,12 @@ public class Proxy implements IProxyCli, Runnable {
 			//fileserver mit min usage suchen
 			long minUsage = Integer.MAX_VALUE;
 			FileServerInfo si = null;
+			String fileservername = null;
+			InfoResponse fileinfo = null;
 			for(String s: keyset){
 				if(fileServerInfoList.get(s).getUsage()<minUsage && fileServerInfoList.get(s).isOnline()){
 					si = fileServerInfoList.get(s);
+					fileservername = s;
 					minUsage = si.getUsage();
 				}
 			}
@@ -216,12 +219,15 @@ public class Proxy implements IProxyCli, Runnable {
 			UserInfo userinfo = userInfoList.get(currentUser);
 			//wenn user zu wenige credits hat
 			System.out.println("Checking users credits...");
-			if(userinfo.getCredits()<((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize()){
+			fileinfo = (InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()));
+			if(userinfo.getCredits()<fileinfo.getSize()){
 				return new MessageResponse("Not enough credits.");
 			}
-			//credits abziehen
+			//credits abziehen && usage erhehen
 			userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize(), userinfo.isOnline()));
+			fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
 			System.out.println("Credits removed.");
+			
 			//downloadticketresponse erstellen
 			return new DownloadTicketResponse(new DownloadTicket(
 					currentUser,
