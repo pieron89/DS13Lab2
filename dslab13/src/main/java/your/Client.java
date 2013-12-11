@@ -63,7 +63,7 @@ public class Client implements Runnable,IClientCli{
 	 */
 	@Override
 	@Command
-	public synchronized LoginResponse login(String username, String password) throws IOException {
+	public LoginResponse login(String username, String password) throws IOException {
 		
 		Response loginresponse = null;
 		try {
@@ -89,7 +89,7 @@ public class Client implements Runnable,IClientCli{
 	 */
 	@Override
 	@Command
-	public synchronized Response credits() throws IOException {
+	public Response credits() throws IOException {
 		
 		CreditsResponse creditsresponse = null;
 		try {
@@ -112,7 +112,7 @@ public class Client implements Runnable,IClientCli{
 	 */
 	@Override
 	@Command
-	public synchronized Response buy(long credits) throws IOException {
+	public Response buy(long credits) throws IOException {
 		
 		BuyResponse buyresponse = null;
 		try {
@@ -134,7 +134,7 @@ public class Client implements Runnable,IClientCli{
 	 */
 	@Override
 	@Command
-	public synchronized Response list() throws IOException {
+	public Response list() throws IOException {
 		
 		ListResponse listresponse = null;
 		try {
@@ -160,7 +160,7 @@ public class Client implements Runnable,IClientCli{
 	 */
 	@Override
 	@Command
-	public synchronized Response download(String filename) throws IOException {
+	public Response download(String filename) throws IOException {
 		
 		DownloadTicketResponse dtr = null;
 		DownloadFileResponse dfr = null;
@@ -230,14 +230,15 @@ public class Client implements Runnable,IClientCli{
 	 */
 	@Override
 	@Command
-	public synchronized MessageResponse upload(String filename) throws IOException {
+	public MessageResponse upload(String filename) throws IOException {
 		
 		File uploadfile = new File(clientConfig.getString("download.dir")+"/"+filename);
 		BufferedReader bufferedreader = new BufferedReader(new FileReader(uploadfile));
 		String line = null;
 		StringBuilder stringbuilder = new StringBuilder();
 		String lineseperator = System.getProperty("line.separator");
-
+		
+		synchronized(stringbuilder){
 		while((line = bufferedreader.readLine()) != null) {
 			stringbuilder.append(line);
 			stringbuilder.append(lineseperator);
@@ -258,13 +259,14 @@ public class Client implements Runnable,IClientCli{
 			exit();
 		}
 		return uploadresponse;
+		}
 	}
 	/**
 	 * @see client.IClientCli#logout()
 	 */
 	@Override
 	@Command
-	public synchronized MessageResponse logout() throws IOException {
+	public MessageResponse logout() throws IOException {
 		
 		MessageResponse logoutresponse = null;
 		try {
@@ -286,7 +288,7 @@ public class Client implements Runnable,IClientCli{
 	 */
 	@Override
 	@Command
-	public synchronized MessageResponse exit() throws IOException {
+	public MessageResponse exit() throws IOException {
 		
 		proxySocket.close();
 		System.in.close();

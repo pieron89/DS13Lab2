@@ -138,20 +138,22 @@ public class Fileserver implements Runnable,IFileServerCli{
 		 * @see server.IFileServer#list()
 		 */
 		@Override
-		public synchronized Response list() throws IOException {
+		public Response list() throws IOException {
 			System.out.println("Received ListRequest from Proxy.");
+			synchronized(fileList){
 			fileList = new HashSet<String>();
 			File[] filearray = new File(filesConfig.getString("fileserver.dir")).listFiles();
 			for(File listfile : filearray){
 				fileList.add(listfile.getName());
 			}
 			return new ListResponse(fileList);
+			}
 		}
 		/**
 		 * @see server.IFileServer#download(message.request.DownloadFileRequest)
 		 */
 		@Override
-		public synchronized Response download(DownloadFileRequest request) throws IOException {
+		public Response download(DownloadFileRequest request) throws IOException {
 			System.out.println("Received DownloadFileRequest from Client: "+request.getTicket().getUsername());
 			BufferedReader bufferedreader = null;
 			File downloadfile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getTicket().getFilename());
@@ -171,7 +173,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 		 * @see server.IFileServer#info(message.request.InfoRequest)
 		 */
 		@Override
-		public synchronized Response info(InfoRequest request) throws IOException {
+		public Response info(InfoRequest request) throws IOException {
 			System.out.println("Received InfoRequest from Proxy.");
 			File infofile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getFilename());
 			return new InfoResponse(request.getFilename(),infofile.length());
@@ -180,7 +182,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 		 * @see server.IFileServer#version(message.request.VersionRequest)
 		 */
 		@Override
-		public synchronized Response version(VersionRequest request) throws IOException {
+		public Response version(VersionRequest request) throws IOException {
 			System.out.println("Received VersionRequest from Proxy.");
 			return new VersionResponse(request.getFilename(),1);
 		}
@@ -188,7 +190,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 		 * @see server.IFileServer#upload(message.request.UploadRequest)
 		 */
 		@Override
-		public synchronized MessageResponse upload(UploadRequest request) throws IOException {
+		public MessageResponse upload(UploadRequest request) throws IOException {
 			System.out.println("Received UploadRequest from Proxy.");
 			System.out.println("Uploading the following File: "+request.getFilename());
 
@@ -250,7 +252,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 	 */
 	@Override
 	@Command
-	public synchronized MessageResponse exit() throws IOException {
+	public MessageResponse exit() throws IOException {
 
 		datagramSocket.close();
 		System.in.close();
