@@ -99,11 +99,13 @@ public class Proxy implements IProxyCli, Runnable {
 					response = inputs.readObject();
 
 					if(response.getClass()==LoginRequest.class){
-						if(!userInfoList.get(((LoginRequest) response).getUsername()).isOnline()&&currentUser==null){
+						if(userInfoList.get(((LoginRequest) response).getUsername())==null){
+							outputs.writeObject(new MessageResponse("User does not exist."));
+						}else if(!userInfoList.get(((LoginRequest) response).getUsername()).isOnline()&&currentUser==null){
 							outputs.writeObject(login((LoginRequest) response));
-							currentUser = ((LoginRequest) response).getUsername();
-							UserInfo userinfo = userInfoList.get(currentUser);
-							userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
+							//currentUser = ((LoginRequest) response).getUsername();
+							//UserInfo userinfo = userInfoList.get(currentUser);
+							//userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
 						}else if(currentUser!=null){
 							outputs.writeObject(new MessageResponse("You are already logged in."));
 						}else if(userInfoList.get(((LoginRequest) response).getUsername()).isOnline()){
@@ -150,10 +152,13 @@ public class Proxy implements IProxyCli, Runnable {
 		@Override
 		public synchronized LoginResponse login(LoginRequest request) throws IOException {
 			System.out.println("Received Loginrequest: "+request.getUsername()+", "+request.getPassword());
-			if(userConfig.getString(request.getUsername()+".password").equals(request.getPassword())){
-				return new LoginResponse(Type.SUCCESS);
-			}else
-				return new LoginResponse(Type.WRONG_CREDENTIALS);
+		    if(userConfig.getString(request.getUsername()+".password").equals(request.getPassword())){
+					currentUser = ((LoginRequest) response).getUsername();
+					UserInfo userinfo = userInfoList.get(currentUser);
+					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
+					return new LoginResponse(Type.SUCCESS);
+			}
+			return new LoginResponse(Type.WRONG_CREDENTIALS);
 		}
 		/**
 		 * @see proxy.IProxy#credits()
@@ -227,7 +232,7 @@ public class Proxy implements IProxyCli, Runnable {
 			userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize(), userinfo.isOnline()));
 			fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
 			System.out.println("Credits removed.");
-			
+
 			//downloadticketresponse erstellen
 			return new DownloadTicketResponse(new DownloadTicket(
 					currentUser,
