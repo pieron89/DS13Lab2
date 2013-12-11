@@ -222,7 +222,8 @@ public class Client implements Runnable,IClientCli{
 			System.out.println("Proxy offline, restart Client.");
 			exit();
 		}
-		return new MessageResponse("File successfully downloaded.");
+		//return new MessageResponse("File successfully downloaded.");
+		return dfr;
 	}
 	/**
 	 * @see client.IClientCli#upload(java.lang.String)
