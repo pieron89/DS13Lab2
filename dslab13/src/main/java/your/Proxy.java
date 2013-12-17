@@ -50,8 +50,6 @@ import cli.Command;
 import cli.Shell;
 
 public class Proxy implements IProxyCli, Runnable {
-
-
 	Config proxyConfig;
 	Config userConfig;
 	Shell proxyShell;
@@ -72,7 +70,188 @@ public class Proxy implements IProxyCli, Runnable {
 		this.proxyShell = proxyShell;
 		this.proxyShell.register(this);
 	}
+	
 
+	@Override
+	public void run() {
+		shellThread = new Thread(proxyShell);
+		shellThread.start();
+
+		fileServerInfoList = new HashMap<String,FileServerInfo>();
+		clientSocketList = new ArrayList<Socket>();
+		isAliveThread = new Thread(new AliveReceiver());
+		isAliveThread.start();
+
+		userConfig = new Config("user");
+		userResource = ResourceBundle.getBundle("user");
+		userInfoList = new HashMap<String, UserInfo>();
+		Set<String> userSet = userResource.keySet();
+		for(String k : userSet){
+			UserInfo userinfo = new UserInfo(k.substring(0,k.indexOf('.')),(long) Integer.parseInt(userResource.getString(k.substring(0,k.indexOf('.'))+".credits")),false);
+			if(!userInfoList.containsKey(userinfo.getName())){
+				userInfoList.put(userinfo.getName(), userinfo);
+			}
+		}
+		try {
+			serverSocket = new ServerSocket(proxyConfig.getInt("tcp.port"));
+			while(true){
+				synchronized(clientSocketList){
+				Socket clientSocket = serverSocket.accept();
+
+				System.out.println("ListenerService: client connected...");
+				clientSocketList.add(clientSocket);
+				ClientConnection clientconnection = new ClientConnection(clientSocket);
+
+				System.out.println("ClientThread erstellt");
+				Thread newclithread = new Thread(clientconnection);
+
+				newclithread.start();
+				}
+			} 
+
+		} catch (SocketException se){
+			System.out.println("serverSocket closed.");
+		} catch (IOException e) {
+
+			e.printStackTrace();
+		}
+
+	}
+
+
+
+	private Object requestToFileserver(FileServerInfo fsi, Request request){
+		//kurze tcp verbindung zum fileserver aufbauen um request zu verschicken und response zu erhalten
+		Socket proxyclientSocket;
+		Object response = null;
+		try {
+			proxyclientSocket = new Socket(fsi.getAddress(), fsi.getPort());
+			ObjectOutputStream outstreamPCS = new ObjectOutputStream(proxyclientSocket.getOutputStream());
+			ObjectInputStream instreamPCS = new ObjectInputStream(proxyclientSocket.getInputStream());
+			outstreamPCS.writeObject(request);
+			response = instreamPCS.readObject();
+			proxyclientSocket.close();
+		} catch (ConnectException e){
+			return new MessageResponse("Could not connect to Fileserver.");
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		}
+
+		return response;
+	}
+	/**
+	 * @see proxy.IProxyCli#fileservers()
+	 */
+	@Override
+	@Command
+	public Response fileservers() throws IOException {
+
+		Set<String> keyset = fileServerInfoList.keySet();
+		List<FileServerInfo> fsi = new ArrayList<FileServerInfo>();
+		synchronized(fsi){
+		for(String s: keyset){
+			fsi.add(fileServerInfoList.get(s));
+		}
+		return new FileServerInfoResponse(fsi);
+		}
+	}
+	/**
+	 * @see proxy.IProxyCli#users()
+	 */
+	@Override
+	@Command
+	public Response users() throws IOException {
+
+		Set<String> userSet = userInfoList.keySet();
+		List<UserInfo> users = new ArrayList<UserInfo>();
+		synchronized(users){
+		for(String k : userSet)
+			users.add(userInfoList.get(k));
+		return new UserInfoResponse(users);
+		}
+	}
+	/**
+	 * @see proxy.IProxyCli#exit()
+	 */
+	@Override
+	@Command
+	public MessageResponse exit() throws IOException {
+
+		try{
+
+			System.in.close();
+			datagramSocket.close();
+			serverSocket.close();
+			for(Socket socket : clientSocketList){
+				socket.close();
+			}
+
+			return new MessageResponse("Proxy existed successfully.");
+		}catch(Exception e){
+			return new MessageResponse("Proxy existed successfully.");
+		}
+	}
+
+	public class AliveReceiver implements Runnable{
+		//isAlive packets erhalten und auf alter ueberpruefen
+		Set<String> keyset;
+		@Override
+		public void run() {
+			isAliveAriveTimes = new HashMap<String, Long>();
+			synchronized(fileServerInfoList){
+			try {
+				datagramSocket = new DatagramSocket(proxyConfig.getInt("udp.port"));
+				datagramSocket.setSoTimeout(1200);
+				byte[] buf = new byte[256];
+
+				while(true){
+					long curTime = Calendar.getInstance().getTimeInMillis();
+					DatagramPacket packet = new DatagramPacket(buf, buf.length);
+					try{
+						datagramSocket.receive(packet);
+						long packetrecieved = Calendar.getInstance().getTimeInMillis();
+						String s = new String(packet.getData());
+						String port = s.substring(0,5);
+						isAliveAriveTimes.put(port, packetrecieved);
+
+						if(!fileServerInfoList.containsKey(port)){
+							fileServerInfoList.put(port, new FileServerInfo(packet.getAddress(), Integer.parseInt(port), 0, true));
+						}else if(fileServerInfoList.containsKey(port)&&fileServerInfoList.get(port).isOnline()==false){
+							FileServerInfo temp;
+							temp = new FileServerInfo(fileServerInfoList.get(port).getAddress(),
+									fileServerInfoList.get(port).getPort(),
+									fileServerInfoList.get(port).getUsage(),
+									true);
+							fileServerInfoList.put(port, temp);
+						}
+						
+					}catch (SocketTimeoutException e) {
+					}
+					keyset = isAliveAriveTimes.keySet();
+
+					for(String g:keyset){
+						if(Math.abs((isAliveAriveTimes.get(g)- curTime )) > (proxyConfig.getInt("fileserver.checkPeriod")+100)){
+							if(fileServerInfoList.get(g).isOnline()){
+								FileServerInfo temp = new FileServerInfo(fileServerInfoList.get(g).getAddress(),
+										fileServerInfoList.get(g).getPort(),
+										fileServerInfoList.get(g).getUsage(),
+										false);
+								fileServerInfoList.put(g, temp);
+							}
+						} 
+					}
+				} 
+			} catch (SocketException e) {
+				System.out.println("datagramSocket closed.");
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			}
+		}		
+	}
+	
 	public class ClientConnection implements IProxy, Runnable{
 		private final Socket clientSocket;
 		private ObjectInputStream inputs;
@@ -296,182 +475,5 @@ public class Proxy implements IProxyCli, Runnable {
 			}
 		}
 	}
-
-	public class AliveReceiver implements Runnable{
-		//isAlive packets erhalten und auf alter ueberpruefen
-		Set<String> keyset;
-		@Override
-		public void run() {
-			isAliveAriveTimes = new HashMap<String, Long>();
-			synchronized(fileServerInfoList){
-			try {
-				datagramSocket = new DatagramSocket(proxyConfig.getInt("udp.port"));
-				datagramSocket.setSoTimeout(1200);
-				byte[] buf = new byte[256];
-
-				while(true){
-					long curTime = Calendar.getInstance().getTimeInMillis();
-					DatagramPacket packet = new DatagramPacket(buf, buf.length);
-					try{
-						datagramSocket.receive(packet);
-						long packetrecieved = Calendar.getInstance().getTimeInMillis();
-						String s = new String(packet.getData());
-						String port = s.substring(0,5);
-						isAliveAriveTimes.put(port, packetrecieved);
-
-						if(!fileServerInfoList.containsKey(port)){
-							fileServerInfoList.put(port, new FileServerInfo(packet.getAddress(), Integer.parseInt(port), 0, true));
-						}else if(fileServerInfoList.containsKey(port)&&fileServerInfoList.get(port).isOnline()==false){
-							FileServerInfo temp;
-							temp = new FileServerInfo(fileServerInfoList.get(port).getAddress(),
-									fileServerInfoList.get(port).getPort(),
-									fileServerInfoList.get(port).getUsage(),
-									true);
-							fileServerInfoList.put(port, temp);
-						}
-						
-					}catch (SocketTimeoutException e) {
-					}
-					keyset = isAliveAriveTimes.keySet();
-
-					for(String g:keyset){
-						if(Math.abs((isAliveAriveTimes.get(g)- curTime )) > (proxyConfig.getInt("fileserver.checkPeriod")+100)){
-							if(fileServerInfoList.get(g).isOnline()){
-								FileServerInfo temp = new FileServerInfo(fileServerInfoList.get(g).getAddress(),
-										fileServerInfoList.get(g).getPort(),
-										fileServerInfoList.get(g).getUsage(),
-										false);
-								fileServerInfoList.put(g, temp);
-							}
-						} 
-					}
-				} 
-			} catch (SocketException e) {
-				System.out.println("datagramSocket closed.");
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-			}
-		}
-	}
-
-	private Object requestToFileserver(FileServerInfo fsi, Request request){
-		//kurze tcp verbindung zum fileserver aufbauen um request zu verschicken und response zu erhalten
-		Socket proxyclientSocket;
-		Object response = null;
-		try {
-			proxyclientSocket = new Socket(fsi.getAddress(), fsi.getPort());
-			ObjectOutputStream outstreamPCS = new ObjectOutputStream(proxyclientSocket.getOutputStream());
-			ObjectInputStream instreamPCS = new ObjectInputStream(proxyclientSocket.getInputStream());
-			outstreamPCS.writeObject(request);
-			response = instreamPCS.readObject();
-			proxyclientSocket.close();
-		} catch (ConnectException e){
-			return new MessageResponse("Could not connect to Fileserver.");
-		} catch (IOException e) {
-			e.printStackTrace();
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		}
-
-		return response;
-	}
-	/**
-	 * @see proxy.IProxyCli#fileservers()
-	 */
-	@Override
-	@Command
-	public Response fileservers() throws IOException {
-
-		Set<String> keyset = fileServerInfoList.keySet();
-		List<FileServerInfo> fsi = new ArrayList<FileServerInfo>();
-		synchronized(fsi){
-		for(String s: keyset){
-			fsi.add(fileServerInfoList.get(s));
-		}
-		return new FileServerInfoResponse(fsi);
-		}
-	}
-	/**
-	 * @see proxy.IProxyCli#users()
-	 */
-	@Override
-	@Command
-	public Response users() throws IOException {
-
-		Set<String> userSet = userInfoList.keySet();
-		List<UserInfo> users = new ArrayList<UserInfo>();
-		synchronized(users){
-		for(String k : userSet)
-			users.add(userInfoList.get(k));
-		return new UserInfoResponse(users);
-		}
-	}
-	/**
-	 * @see proxy.IProxyCli#exit()
-	 */
-	@Override
-	@Command
-	public MessageResponse exit() throws IOException {
-
-		try{
-
-			System.in.close();
-			datagramSocket.close();
-			serverSocket.close();
-			for(Socket socket : clientSocketList){
-				socket.close();
-			}
-
-			return new MessageResponse("Proxy existed successfully.");
-		}catch(Exception e){
-			return new MessageResponse("Proxy existed successfully.");
-		}
-	}
-
-	@Override
-	public void run() {
-		shellThread = new Thread(proxyShell);
-		shellThread.start();
-
-		fileServerInfoList = new HashMap<String,FileServerInfo>();
-		clientSocketList = new ArrayList<Socket>();
-		isAliveThread = new Thread(new AliveReceiver());
-		isAliveThread.start();
-
-		userConfig = new Config("user");
-		userResource = ResourceBundle.getBundle("user");
-		userInfoList = new HashMap<String, UserInfo>();
-		Set<String> userSet = userResource.keySet();
-		for(String k : userSet){
-			UserInfo userinfo = new UserInfo(k.substring(0,k.indexOf('.')),(long) Integer.parseInt(userResource.getString(k.substring(0,k.indexOf('.'))+".credits")),false);
-			if(!userInfoList.containsKey(userinfo.getName())){
-				userInfoList.put(userinfo.getName(), userinfo);
-			}
-		}
-		try {
-			serverSocket = new ServerSocket(proxyConfig.getInt("tcp.port"));
-			while(true){
-				synchronized(clientSocketList){
-				Socket clientSocket = serverSocket.accept();
-
-				System.out.println("ListenerService: client connected...");
-				clientSocketList.add(clientSocket);
-				ClientConnection clientconnection = new ClientConnection(clientSocket);
-
-				System.out.println("ClientThread erstellt");
-				Thread newclithread = new Thread(clientconnection);
-
-				newclithread.start();
-				}
-			} 
-
-		} catch (SocketException se){
-			System.out.println("serverSocket closed.");
-		} catch (IOException e) {
-
-			e.printStackTrace();
-		}
-
-	}
+	
 }

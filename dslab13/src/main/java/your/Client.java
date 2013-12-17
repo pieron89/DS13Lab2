@@ -58,6 +58,25 @@ public class Client implements Runnable,IClientCli{
 		shellThread = new Thread(clientShell);
 		
 	}
+	
+	@Override
+	public void run() {
+		//shellThread.start();
+		try {
+			this.proxySocket = new Socket(clientConfig.getString("proxy.host"), clientConfig.getInt("proxy.tcp.port"));
+			this.proxyOutstream = new ObjectOutputStream(proxySocket.getOutputStream());
+			this.proxyInstream = new ObjectInputStream(proxySocket.getInputStream());
+			shellThread.start();
+
+			System.out.println("Connection to Proxy established.");
+
+		} catch(ConnectException e){
+			System.out.println("Proxy offline, restart Client.");
+		}catch (IOException e) {
+			//System.out.println("Lost Connection to Proxy");
+		}
+	}
+	
 	/**
 	 * @see client.IClientCli#login(java.lang.String, java.lang.String)
 	 */
@@ -294,23 +313,6 @@ public class Client implements Runnable,IClientCli{
 		System.in.close();
 		return new MessageResponse("Client exited successfully.");
 	}
-	
-	@Override
-	public void run() {
-		//shellThread.start();
-		try {
-			this.proxySocket = new Socket(clientConfig.getString("proxy.host"), clientConfig.getInt("proxy.tcp.port"));
-			this.proxyOutstream = new ObjectOutputStream(proxySocket.getOutputStream());
-			this.proxyInstream = new ObjectInputStream(proxySocket.getInputStream());
-			shellThread.start();
 
-			System.out.println("Connection to Proxy established.");
-
-		} catch(ConnectException e){
-			System.out.println("Proxy offline, restart Client.");
-		}catch (IOException e) {
-			//System.out.println("Lost Connection to Proxy");
-		}
-	}
 
 }
