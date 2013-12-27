@@ -17,9 +17,9 @@ public class RSAChannel extends ChannelDecorator{
 	
 	private String pathToPublicKey;
 
-	public RSAChannel(Channel decoratorChannel, String pathToPublicKey) {
+	public RSAChannel(Channel decoratorChannel) {
 		super(decoratorChannel);
-		this.pathToPublicKey = pathToPublicKey;
+		//this.pathToPublicKey = pathToPublicKey;
 		// TODO Auto-generated constructor stub
 	}
 	
@@ -83,6 +83,10 @@ public class RSAChannel extends ChannelDecorator{
 			e.printStackTrace();
 		}
 		
+	}
+	
+	public void setPathtoPublicKey(String pathToPublicKey){
+		this.pathToPublicKey = pathToPublicKey;
 	}
 
 }

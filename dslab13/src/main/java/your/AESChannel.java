@@ -17,10 +17,10 @@ public class AESChannel extends ChannelDecorator {
 	private SecretKey secretKey;
 	private byte[] iv;
 	
-	public AESChannel(Channel decoratorChannel, SecretKey secretKey, byte[] iv) {
+	public AESChannel(Channel decoratorChannel) {
 		super(decoratorChannel);
-		this.secretKey = secretKey;
-		this.iv = iv;
+		//this.secretKey = secretKey;
+		//this.iv = iv;
 		// TODO Auto-generated constructor stub
 	}
 
@@ -86,6 +86,13 @@ public class AESChannel extends ChannelDecorator {
 			e.printStackTrace();
 		}
 
+	}
+	
+	public void setAESSecretKey(SecretKey secretKey){
+		this.secretKey = secretKey;
+	}
+	public void setAESiv(byte[] iv){
+		this.iv = iv;
 	}
 
 }
