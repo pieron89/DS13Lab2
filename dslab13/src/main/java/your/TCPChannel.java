@@ -12,8 +12,9 @@ public class TCPChannel implements Channel {
 	ObjectOutputStream outstream;
 	ObjectInputStream instream;
 	
-	public TCPChannel(InetAddress address, int tcpport) throws IOException{
-		mySocket = new Socket(address, tcpport);
+	public TCPChannel(Socket mySocket) throws IOException{
+		//mySocket = new Socket(address, tcpport);
+		this.mySocket = mySocket;
 		outstream = new ObjectOutputStream(mySocket.getOutputStream());
 		instream = new ObjectInputStream(mySocket.getInputStream());
 	}
