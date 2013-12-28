@@ -60,6 +60,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 		packetSender = new AliveSender();
 		isAliveSending = new Thread(packetSender);
 		isAliveSending.start();
+		fileList = new HashSet<String>();
 
 		try {
 			serverSocket = new ServerSocket(filesConfig.getInt("tcp.port"));
@@ -140,8 +141,8 @@ public class Fileserver implements Runnable,IFileServerCli{
 		@Override
 		public Response list() throws IOException {
 			System.out.println("Received ListRequest from Proxy.");
+			
 			synchronized(fileList){
-			fileList = new HashSet<String>();
 			File[] filearray = new File(filesConfig.getString("fileserver.dir")).listFiles();
 			for(File listfile : filearray){
 				fileList.add(listfile.getName());
