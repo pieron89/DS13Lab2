@@ -409,7 +409,10 @@ public class Proxy implements IProxyCli, Runnable {
 				AES64TCPChannel.setAESSecretKey(secretKey);
 				AES64TCPChannel.setAESiv(iv);
 				byte[] response = AES64TCPChannel.receive();
-				if(Arrays.equals(response, (proxyChallenge))){
+				System.out.println(new String(Base64.decode(response)));
+				System.out.println(new String(proxyChallenge));
+				if(Arrays.equals(Base64.decode(response), (proxyChallenge))){
+					System.out.println("client challenge passed.");
 					currentUser = request.getUsername();
 					UserInfo userinfo = userInfoList.get(currentUser);
 					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
