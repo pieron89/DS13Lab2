@@ -124,6 +124,10 @@ public class Client implements Runnable,IClientCli{
 		try {
 			//proxyOutstream.writeObject(new LoginRequest(username, password));
 			//RSA64ProxyChannel.send(serialize(new LoginRequest(username, password)));
+			if(userPrivateKeyPath!=null){
+				System.out.println("Please log out first!");
+				return new LoginResponse(Type.WRONG_CREDENTIALS);
+			}
 			if(privateKeyPathFile.exists()){
 				System.out.println("Userkeyfile exists!");
 				RSA64ProxyChannel.setPrivateKey(privateKeyPathFile.getAbsolutePath(), userConfig.getString(username+".password"));
@@ -424,7 +428,7 @@ public class Client implements Runnable,IClientCli{
 
 			AES64ProxyChannel.send(serialize(new LogoutRequest()));
 			logoutresponse = (MessageResponse) deserialize(AES64ProxyChannel.receive());
-			userPrivateKeyPath = "";
+			userPrivateKeyPath = null;
 
 		} catch (ClassNotFoundException e) {
 			e.printStackTrace();
