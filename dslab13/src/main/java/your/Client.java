@@ -140,6 +140,9 @@ public class Client implements Runnable,IClientCli{
 //						byte[] proxyChallenge = new byte[32];
 //						proxyChallenge = okres.getProxyChallenge();
 //						proxyChallenge = 
+						AES64ProxyChannel.setAESSecretKey(new SecretKeySpec(Base64.decode(okres.getSecretKey()), 0, 
+								Base64.decode(okres.getSecretKey()).length, "AES"));
+						AES64ProxyChannel.setAESiv(okres.getIv());
 						AES64ProxyChannel.send(okres.getProxyChallenge());
 						Object successResponse = AES64ProxyChannel.receive();
 						if(successResponse instanceof LoginResponse){
@@ -147,9 +150,6 @@ public class Client implements Runnable,IClientCli{
 							System.out.println("SuccessResponse received!");
 							if(loginResponse.getType()==Type.SUCCESS){
 								System.out.println("Secure connection established!");
-								AES64ProxyChannel.setAESSecretKey(new SecretKeySpec(Base64.decode(okres.getSecretKey()), 0, 
-										Base64.decode(okres.getSecretKey()).length, "AES"));
-								AES64ProxyChannel.setAESiv(okres.getIv());
 								return (LoginResponse) successResponse;
 							}
 							System.out.println("Failure to establish secure Connection!");
@@ -169,6 +169,7 @@ public class Client implements Runnable,IClientCli{
 
 
 		} catch (NullPointerException e) {
+			e.printStackTrace();
 			System.out.println("Proxy offline, restart Client.");
 			exit();
 		} catch (SocketException e){
