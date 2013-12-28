@@ -285,7 +285,7 @@ public class Proxy implements IProxyCli, Runnable {
 			this.clientChannel = clientChannel;
 			RSA64TCPChannel = new RSAChannel(new Base64Channel(clientChannel));
 			AES64TCPChannel = new AESChannel(new Base64Channel(clientChannel));
-
+			RSA64TCPChannel.setPrivateKey(proxyConfig.getString("key"), "12345");
 			//try {
 			//	outputs = new ObjectOutputStream(clientSocket.getOutputStream());
 			//	inputs = new ObjectInputStream(clientSocket.getInputStream());
@@ -388,7 +388,6 @@ public class Proxy implements IProxyCli, Runnable {
 		public LoginResponse login(LoginChallengeRequest request) throws IOException, NoSuchAlgorithmException, ClassNotFoundException {
 			synchronized(userInfoList){
 				RSA64TCPChannel.setPublicKey(proxyConfig.getString("keys.dir")+"/"+request.getUsername()+".pub.pem");
-				RSA64TCPChannel.setPrivateKey(proxyConfig.getString("key"), userConfig.getString(request.getUsername()+".password"));
 				// generates a 32 byte secure random number 
 				SecureRandom secureRandom = new SecureRandom(); 
 				final byte[] proxyChallenge = new byte[32]; 

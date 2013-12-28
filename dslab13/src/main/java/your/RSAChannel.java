@@ -106,10 +106,9 @@ public class RSAChannel extends ChannelDecorator{
 	}
 
 	public void setPrivateKey(String pathToPublicKey, final String password){
-		String pathToPrivateKey = null;
 		PEMReader in;
 		try {
-			in = new PEMReader(new FileReader(pathToPrivateKey), new PasswordFinder() {
+			in = new PEMReader(new FileReader(pathToPublicKey), new PasswordFinder() {
 
 				@Override
 				public char[] getPassword() {
