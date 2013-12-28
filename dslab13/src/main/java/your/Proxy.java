@@ -397,6 +397,7 @@ public class Proxy implements IProxyCli, Runnable {
 				SecureRandom secureRandom2 = new SecureRandom(); 
 				final byte[] iv = new byte[16]; 
 				secureRandom2.nextBytes(iv);
+				byte[] ivBase64 = Base64.encode(iv);
 				// generating a 256 bits secretkey
 				KeyGenerator generator = KeyGenerator.getInstance("AES"); 
 				generator.init(256); 
@@ -404,7 +405,7 @@ public class Proxy implements IProxyCli, Runnable {
 				byte[] secretKeyBase64 = Base64.encode(secretKey.getEncoded());
 				//secretKey = new SecretKeySpec(secretKeyBase64, 0, secretKeyBase64.length, "AES");
 				//sending 2nd message
-				RSA64TCPChannel.send(serialize(new OkResponse(Base64.encode(request.getclientChallenge()), Base64.encode(proxyChallenge), secretKeyBase64, Base64.encode(iv))));
+				RSA64TCPChannel.send(serialize(new OkResponse(Base64.encode(request.getclientChallenge()), Base64.encode(proxyChallenge), secretKeyBase64, ivBase64)));
 				AES64TCPChannel.setAESSecretKey(secretKey);
 				AES64TCPChannel.setAESiv(iv);
 				byte[] response = AES64TCPChannel.receive();
