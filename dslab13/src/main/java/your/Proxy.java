@@ -219,7 +219,7 @@ public class Proxy implements IProxyCli, Runnable {
 		@Override
 		public void run() {
 			isAliveAriveTimes = new HashMap<String, Long>();
-			synchronized(fileServerInfoList){
+			//synchronized(fileServerInfoList){
 				try {
 					datagramSocket = new DatagramSocket(proxyConfig.getInt("udp.port"));
 					datagramSocket.setSoTimeout(1200);
@@ -266,7 +266,7 @@ public class Proxy implements IProxyCli, Runnable {
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
-			}
+			//}
 		}		
 	}
 
@@ -474,8 +474,8 @@ public class Proxy implements IProxyCli, Runnable {
 		public Response download(DownloadTicketRequest request) throws IOException {
 			System.out.println("Received Downloadticketrequest from "+currentUser);
 			Set<String> keyset = fileServerInfoList.keySet(); 
-			//synchronized(fileServerInfoList){
-				//synchronized(userInfoList){
+			synchronized(fileServerInfoList){
+				synchronized(userInfoList){
 					//wenn keine fileserver online
 					if(keyset.isEmpty()){
 						System.out.println("No fileservers online at the time.");
@@ -525,8 +525,8 @@ public class Proxy implements IProxyCli, Runnable {
 									si.getPort()
 							)
 							);
-				//}
-			//}
+				}
+			}
 		}
 		/**
 		 * @see proxy.IProxy#upload(message.request.UploadRequest)
