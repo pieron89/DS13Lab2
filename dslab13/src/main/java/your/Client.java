@@ -151,6 +151,7 @@ public class Client implements Runnable,IClientCli{
 						if(successResponse instanceof LoginResponse){
 							LoginResponse loginResponse = (LoginResponse) successResponse;
 							System.out.println("SuccessResponse received!");
+							System.out.println(loginResponse.getType());
 							if(loginResponse.getType()==Type.SUCCESS){
 								System.out.println("Secure connection established!");
 								return (LoginResponse) successResponse;
