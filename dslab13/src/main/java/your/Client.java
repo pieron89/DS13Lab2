@@ -137,16 +137,18 @@ public class Client implements Runnable,IClientCli{
 					System.out.println(clientChallenge);
 					if(Arrays.equals(Base64.decode(okres.getClientChallenge()),(clientChallenge))){
 						System.out.println("ClientChallenge check passed!");
-						byte[] proxyChallenge = new byte[32];
-						proxyChallenge = okres.getProxyChallenge();
-						AES64ProxyChannel.send(proxyChallenge);
+//						byte[] proxyChallenge = new byte[32];
+//						proxyChallenge = okres.getProxyChallenge();
+//						proxyChallenge = 
+						AES64ProxyChannel.send(okres.getProxyChallenge());
 						Object successResponse = AES64ProxyChannel.receive();
 						if(successResponse instanceof LoginResponse){
 							LoginResponse loginResponse = (LoginResponse) successResponse;
 							System.out.println("SuccessResponse received!");
 							if(loginResponse.getType()==Type.SUCCESS){
 								System.out.println("Secure connection established!");
-								AES64ProxyChannel.setAESSecretKey(new SecretKeySpec(okres.getSecretKey(), 0, okres.getSecretKey().length, "AES"));
+								AES64ProxyChannel.setAESSecretKey(new SecretKeySpec(Base64.decode(okres.getSecretKey()), 0, 
+										Base64.decode(okres.getSecretKey()).length, "AES"));
 								AES64ProxyChannel.setAESiv(okres.getIv());
 								return (LoginResponse) successResponse;
 							}
