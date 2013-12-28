@@ -1,5 +1,8 @@
 package your;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -10,12 +13,20 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.Set;
+
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.bouncycastle.util.encoders.Base64;
 
 import proxy.IProxy;
 import proxy.IProxyCli;
@@ -26,6 +37,7 @@ import message.response.FileServerInfoResponse;
 import message.response.InfoResponse;
 import message.response.ListResponse;
 import message.response.LoginResponse.Type;
+import message.response.OkResponse;
 import message.response.UserInfoResponse;
 import message.response.VersionResponse;
 import message.Request;
@@ -35,6 +47,7 @@ import message.request.CreditsRequest;
 import message.request.DownloadTicketRequest;
 import message.request.InfoRequest;
 import message.request.ListRequest;
+import message.request.LoginChallengeRequest;
 import message.request.LoginRequest;
 import message.request.LogoutRequest;
 import message.request.UploadRequest;
@@ -57,6 +70,7 @@ public class Proxy implements IProxyCli, Runnable {
 	HashMap<String, FileServerInfo> fileServerInfoList;
 	HashMap<String, Long> isAliveAriveTimes;
 	List<Socket> clientSocketList;
+	List<Channel> clientChannelList;
 
 	Thread shellThread;
 	Thread isAliveThread;
@@ -70,7 +84,7 @@ public class Proxy implements IProxyCli, Runnable {
 		this.proxyShell = proxyShell;
 		this.proxyShell.register(this);
 	}
-	
+
 
 	@Override
 	public void run() {
@@ -79,6 +93,7 @@ public class Proxy implements IProxyCli, Runnable {
 
 		fileServerInfoList = new HashMap<String,FileServerInfo>();
 		clientSocketList = new ArrayList<Socket>();
+		clientChannelList = new ArrayList<Channel>();
 		isAliveThread = new Thread(new AliveReceiver());
 		isAliveThread.start();
 
@@ -96,16 +111,19 @@ public class Proxy implements IProxyCli, Runnable {
 			serverSocket = new ServerSocket(proxyConfig.getInt("tcp.port"));
 			while(true){
 				synchronized(clientSocketList){
-				Socket clientSocket = serverSocket.accept();
+					Socket clientSocket = serverSocket.accept();
 
-				System.out.println("ListenerService: client connected...");
-				clientSocketList.add(clientSocket);
-				ClientConnection clientconnection = new ClientConnection(clientSocket);
+					System.out.println("ListenerService: client connected...");
+					//clientSocketList.add(clientSocket);
+					TCPChannel clientChannel = new TCPChannel(clientSocket);
+					clientChannelList.add(clientChannel);
+					//ClientConnection clientconnection = new ClientConnection(clientSocket);
+					ClientConnection clientconnection = new ClientConnection(clientChannel);
 
-				System.out.println("ClientThread erstellt");
-				Thread newclithread = new Thread(clientconnection);
+					System.out.println("ClientThread erstellt");
+					Thread newclithread = new Thread(clientconnection);
 
-				newclithread.start();
+					newclithread.start();
 				}
 			} 
 
@@ -151,10 +169,10 @@ public class Proxy implements IProxyCli, Runnable {
 		Set<String> keyset = fileServerInfoList.keySet();
 		List<FileServerInfo> fsi = new ArrayList<FileServerInfo>();
 		synchronized(fsi){
-		for(String s: keyset){
-			fsi.add(fileServerInfoList.get(s));
-		}
-		return new FileServerInfoResponse(fsi);
+			for(String s: keyset){
+				fsi.add(fileServerInfoList.get(s));
+			}
+			return new FileServerInfoResponse(fsi);
 		}
 	}
 	/**
@@ -167,9 +185,9 @@ public class Proxy implements IProxyCli, Runnable {
 		Set<String> userSet = userInfoList.keySet();
 		List<UserInfo> users = new ArrayList<UserInfo>();
 		synchronized(users){
-		for(String k : userSet)
-			users.add(userInfoList.get(k));
-		return new UserInfoResponse(users);
+			for(String k : userSet)
+				users.add(userInfoList.get(k));
+			return new UserInfoResponse(users);
 		}
 	}
 	/**
@@ -201,72 +219,79 @@ public class Proxy implements IProxyCli, Runnable {
 		public void run() {
 			isAliveAriveTimes = new HashMap<String, Long>();
 			synchronized(fileServerInfoList){
-			try {
-				datagramSocket = new DatagramSocket(proxyConfig.getInt("udp.port"));
-				datagramSocket.setSoTimeout(1200);
-				byte[] buf = new byte[256];
+				try {
+					datagramSocket = new DatagramSocket(proxyConfig.getInt("udp.port"));
+					datagramSocket.setSoTimeout(1200);
+					byte[] buf = new byte[256];
 
-				while(true){
-					long curTime = Calendar.getInstance().getTimeInMillis();
-					DatagramPacket packet = new DatagramPacket(buf, buf.length);
-					try{
-						datagramSocket.receive(packet);
-						long packetrecieved = Calendar.getInstance().getTimeInMillis();
-						String s = new String(packet.getData());
-						String port = s.substring(0,5);
-						isAliveAriveTimes.put(port, packetrecieved);
+					while(true){
+						long curTime = Calendar.getInstance().getTimeInMillis();
+						DatagramPacket packet = new DatagramPacket(buf, buf.length);
+						try{
+							datagramSocket.receive(packet);
+							long packetrecieved = Calendar.getInstance().getTimeInMillis();
+							String s = new String(packet.getData());
+							String port = s.substring(0,5);
+							isAliveAriveTimes.put(port, packetrecieved);
 
-						if(!fileServerInfoList.containsKey(port)){
-							fileServerInfoList.put(port, new FileServerInfo(packet.getAddress(), Integer.parseInt(port), 0, true));
-						}else if(fileServerInfoList.containsKey(port)&&fileServerInfoList.get(port).isOnline()==false){
-							FileServerInfo temp;
-							temp = new FileServerInfo(fileServerInfoList.get(port).getAddress(),
-									fileServerInfoList.get(port).getPort(),
-									fileServerInfoList.get(port).getUsage(),
-									true);
-							fileServerInfoList.put(port, temp);
-						}
-						
-					}catch (SocketTimeoutException e) {
-					}
-					keyset = isAliveAriveTimes.keySet();
-
-					for(String g:keyset){
-						if(Math.abs((isAliveAriveTimes.get(g)- curTime )) > (proxyConfig.getInt("fileserver.checkPeriod")+100)){
-							if(fileServerInfoList.get(g).isOnline()){
-								FileServerInfo temp = new FileServerInfo(fileServerInfoList.get(g).getAddress(),
-										fileServerInfoList.get(g).getPort(),
-										fileServerInfoList.get(g).getUsage(),
-										false);
-								fileServerInfoList.put(g, temp);
+							if(!fileServerInfoList.containsKey(port)){
+								fileServerInfoList.put(port, new FileServerInfo(packet.getAddress(), Integer.parseInt(port), 0, true));
+							}else if(fileServerInfoList.containsKey(port)&&fileServerInfoList.get(port).isOnline()==false){
+								FileServerInfo temp;
+								temp = new FileServerInfo(fileServerInfoList.get(port).getAddress(),
+										fileServerInfoList.get(port).getPort(),
+										fileServerInfoList.get(port).getUsage(),
+										true);
+								fileServerInfoList.put(port, temp);
 							}
-						} 
-					}
-				} 
-			} catch (SocketException e) {
-				System.out.println("datagramSocket closed.");
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+
+						}catch (SocketTimeoutException e) {
+						}
+						keyset = isAliveAriveTimes.keySet();
+
+						for(String g:keyset){
+							if(Math.abs((isAliveAriveTimes.get(g)- curTime )) > (proxyConfig.getInt("fileserver.checkPeriod")+100)){
+								if(fileServerInfoList.get(g).isOnline()){
+									FileServerInfo temp = new FileServerInfo(fileServerInfoList.get(g).getAddress(),
+											fileServerInfoList.get(g).getPort(),
+											fileServerInfoList.get(g).getUsage(),
+											false);
+									fileServerInfoList.put(g, temp);
+								}
+							} 
+						}
+					} 
+				} catch (SocketException e) {
+					System.out.println("datagramSocket closed.");
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 			}
 		}		
 	}
-	
-	public class ClientConnection implements IProxy, Runnable{
-		private final Socket clientSocket;
-		private ObjectInputStream inputs;
-		private ObjectOutputStream outputs;
-		Object response;
-		private String currentUser = null;
 
-		public ClientConnection(Socket clientSocket) {
-			this.clientSocket = clientSocket;
-			try {
-				outputs = new ObjectOutputStream(clientSocket.getOutputStream());
-				inputs = new ObjectInputStream(clientSocket.getInputStream());
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+	public class ClientConnection implements IProxy, Runnable{
+		//private final Socket clientSocket;
+		//private ObjectInputStream inputs;
+		//private ObjectOutputStream outputs;
+		Object request;
+		private String currentUser = null;
+		private TCPChannel clientChannel;
+		private RSAChannel RSA64TCPChannel;
+		private AESChannel AES64TCPChannel;
+
+		public ClientConnection(TCPChannel clientChannel) {
+			//this.clientSocket = clientSocket;
+			this.clientChannel = clientChannel;
+			RSA64TCPChannel = new RSAChannel(new Base64Channel(clientChannel));
+			AES64TCPChannel = new AESChannel(new Base64Channel(clientChannel));
+
+			//try {
+			//	outputs = new ObjectOutputStream(clientSocket.getOutputStream());
+			//	inputs = new ObjectInputStream(clientSocket.getInputStream());
+			//} catch (IOException e) {
+			//	e.printStackTrace();
+			//}
 
 		}
 
@@ -275,7 +300,32 @@ public class Proxy implements IProxyCli, Runnable {
 			try {    
 
 				while(true){
-					response = inputs.readObject();
+					if(currentUser==null){
+						request = deserialize(RSA64TCPChannel.receive());
+						if(request.getClass()==LoginChallengeRequest.class){
+							if(!userInfoList.get(((LoginChallengeRequest) request).getUsername()).isOnline()){
+								login((LoginChallengeRequest) request);
+							}
+						}
+					}else{
+						request = deserialize(AES64TCPChannel.receive());
+						if(request.getClass()==BuyRequest.class){
+							AES64TCPChannel.send(serialize(buy((BuyRequest) request)));
+						}else if(request.getClass()==CreditsRequest.class){
+							AES64TCPChannel.send(serialize(credits()));
+						}else if(request.getClass()==ListRequest.class){
+							AES64TCPChannel.send(serialize(list()));
+						}else if(request.getClass()==DownloadTicketRequest.class){
+							AES64TCPChannel.send(serialize(download((DownloadTicketRequest) request)));
+						}else if(request.getClass()==UploadRequest.class){
+							AES64TCPChannel.send(serialize(upload((UploadRequest) request)));
+						}else if(request.getClass()==LogoutRequest.class){
+							AES64TCPChannel.send(serialize(logout()));
+						}else{
+							AES64TCPChannel.send(serialize(new MessageResponse("You are already logged in.")));
+						}
+					}
+					/*response = inputs.readObject();
 
 					if(response.getClass()==LoginRequest.class){
 						if(userInfoList.get(((LoginRequest) response).getUsername())==null){
@@ -308,10 +358,10 @@ public class Proxy implements IProxyCli, Runnable {
 					}else if(response.getClass()==LogoutRequest.class){
 						if(currentUser != null) outputs.writeObject(logout());
 						else outputs.writeObject(new MessageResponse("Please log in first."));
-					}
+					}*/
 				}
 			}catch (IOException e) {
-				try {
+				/*try {
 					if(currentUser!=null){
 						logout();
 					}
@@ -320,26 +370,66 @@ public class Proxy implements IProxyCli, Runnable {
 					Thread.currentThread().interrupt();
 				} catch (IOException e1) {
 					e1.printStackTrace();
-				}
+				}*/
+				e.printStackTrace();
 			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+				System.out.println("Message Object-Class not recognized.");
+			} catch (NoSuchAlgorithmException e) {
+				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
 		/**
+		 * @throws NoSuchAlgorithmException 
+		 * @throws ClassNotFoundException 
 		 * @see proxy.IProxy#login(message.request.LoginRequest)
 		 */
+		public LoginResponse login(LoginChallengeRequest request) throws IOException, NoSuchAlgorithmException, ClassNotFoundException {
+			synchronized(userInfoList){
+				RSA64TCPChannel.setPublicKey(proxyConfig.getString("keys.dir")+"/"+request.getUsername()+".pub.pem");
+				RSA64TCPChannel.setPrivateKey(proxyConfig.getString("key"), userConfig.getString(request.getUsername()+".password"));
+				// generates a 32 byte secure random number 
+				SecureRandom secureRandom = new SecureRandom(); 
+				final byte[] proxyChallenge = new byte[32]; 
+				secureRandom.nextBytes(proxyChallenge);
+				// generates a 16 byte secure random number
+				SecureRandom secureRandom2 = new SecureRandom(); 
+				final byte[] iv = new byte[16]; 
+				secureRandom2.nextBytes(iv);
+				// generating a 256 bits secretkey
+				KeyGenerator generator = KeyGenerator.getInstance("AES"); 
+				generator.init(256); 
+				SecretKey secretKey = generator.generateKey();
+				byte[] secretKeyBase64 = Base64.encode(secretKey.getEncoded());
+				secretKey = new SecretKeySpec(secretKeyBase64, 0, secretKeyBase64.length, "AES");
+				//sending 2nd message
+				RSA64TCPChannel.send(serialize(new OkResponse(Base64.encode(request.getclientChallenge()), Base64.encode(proxyChallenge), secretKey, Base64.encode(iv))));
+				byte[] response = RSA64TCPChannel.receive();
+				if(response.toString().equals(proxyChallenge)){
+					currentUser = request.getUsername();
+					UserInfo userinfo = userInfoList.get(currentUser);
+					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
+					AES64TCPChannel.setAESSecretKey(secretKey);
+					AES64TCPChannel.setAESiv(iv);
+					return new LoginResponse(Type.SUCCESS);
+				}
+			return new LoginResponse(Type.WRONG_CREDENTIALS);
+			}
+		}
 		@Override
 		public LoginResponse login(LoginRequest request) throws IOException {
-			synchronized(userInfoList){
-			System.out.println("Received Loginrequest: "+request.getUsername()+", "+request.getPassword());
-		    if(userConfig.getString(request.getUsername()+".password").equals(request.getPassword())){
+			/*synchronized(userInfoList){
+				System.out.println("Received Loginrequest: "+request.getUsername()+", "+request.getPassword());
+				if(userConfig.getString(request.getUsername()+".password").equals(request.getPassword())){
 					currentUser = ((LoginRequest) response).getUsername();
 					UserInfo userinfo = userInfoList.get(currentUser);
 					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
 					return new LoginResponse(Type.SUCCESS);
-			}
-			return new LoginResponse(Type.WRONG_CREDENTIALS);
-			}
+				}
+				return new LoginResponse(Type.WRONG_CREDENTIALS);
+			}*/
+			return null;
 		}
 		/**
 		 * @see proxy.IProxy#credits()
@@ -355,10 +445,10 @@ public class Proxy implements IProxyCli, Runnable {
 		@Override
 		public Response buy(BuyRequest credits) throws IOException {
 			synchronized(userInfoList){
-			System.out.println("Received Buyrequest from "+currentUser);
-			UserInfo userinfo = userInfoList.get(currentUser);
-			userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()+credits.getCredits(), userinfo.isOnline()));
-			return new BuyResponse(userinfo.getCredits()+credits.getCredits());
+				System.out.println("Received Buyrequest from "+currentUser);
+				UserInfo userinfo = userInfoList.get(currentUser);
+				userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()+credits.getCredits(), userinfo.isOnline()));
+				return new BuyResponse(userinfo.getCredits()+credits.getCredits());
 			}
 		}
 		/**
@@ -383,56 +473,56 @@ public class Proxy implements IProxyCli, Runnable {
 			Set<String> keyset = fileServerInfoList.keySet(); 
 			synchronized(fileServerInfoList){
 				synchronized(userInfoList){
-			//wenn keine fileserver online
-			if(keyset.isEmpty()){
-				System.out.println("No fileservers online at the time.");
-				return new DownloadTicketResponse(null);
-			}
-			//wenn die file nicht vorhanden ist
-			if(!((ListResponse) list()).getFileNames().contains(request.getFilename())){
-				System.out.println("File not found.");
-				return new DownloadTicketResponse(null);
-			}
-			//fileserver mit min usage suchen
-			long minUsage = Integer.MAX_VALUE;
-			FileServerInfo si = null;
-			String fileservername = null;
-			InfoResponse fileinfo = null;
-			for(String s: keyset){
-				if(fileServerInfoList.get(s).getUsage()<minUsage && fileServerInfoList.get(s).isOnline()){
-					si = fileServerInfoList.get(s);
-					fileservername = s;
-					minUsage = si.getUsage();
-				}
-			}
-			//credits abziehen
-			UserInfo userinfo = userInfoList.get(currentUser);
-			//wenn user zu wenige credits hat
-			System.out.println("Checking users credits...");
-			fileinfo = (InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()));
-			if(userinfo.getCredits()<fileinfo.getSize()){
-				return new MessageResponse("Not enough credits.");
-			}
-			//credits abziehen && usage erhehen
-			userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize(), userinfo.isOnline()));
-			fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
-			System.out.println("Credits removed.");
+					//wenn keine fileserver online
+					if(keyset.isEmpty()){
+						System.out.println("No fileservers online at the time.");
+						return new DownloadTicketResponse(null);
+					}
+					//wenn die file nicht vorhanden ist
+					if(!((ListResponse) list()).getFileNames().contains(request.getFilename())){
+						System.out.println("File not found.");
+						return new DownloadTicketResponse(null);
+					}
+					//fileserver mit min usage suchen
+					long minUsage = Integer.MAX_VALUE;
+					FileServerInfo si = null;
+					String fileservername = null;
+					InfoResponse fileinfo = null;
+					for(String s: keyset){
+						if(fileServerInfoList.get(s).getUsage()<minUsage && fileServerInfoList.get(s).isOnline()){
+							si = fileServerInfoList.get(s);
+							fileservername = s;
+							minUsage = si.getUsage();
+						}
+					}
+					//credits abziehen
+					UserInfo userinfo = userInfoList.get(currentUser);
+					//wenn user zu wenige credits hat
+					System.out.println("Checking users credits...");
+					fileinfo = (InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()));
+					if(userinfo.getCredits()<fileinfo.getSize()){
+						return new MessageResponse("Not enough credits.");
+					}
+					//credits abziehen && usage erhehen
+					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize(), userinfo.isOnline()));
+					fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
+					System.out.println("Credits removed.");
 
-			//downloadticketresponse erstellen
-			return new DownloadTicketResponse(new DownloadTicket(
-					currentUser,
-					request.getFilename(),
-					ChecksumUtils.generateChecksum(
+					//downloadticketresponse erstellen
+					return new DownloadTicketResponse(new DownloadTicket(
 							currentUser,
 							request.getFilename(),
-							((VersionResponse) requestToFileserver(si, new VersionRequest(request.getFilename()))).getVersion(),
-							((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize()
-							),
-							si.getAddress(),
-							si.getPort()
-					)
-					);
-			}
+							ChecksumUtils.generateChecksum(
+									currentUser,
+									request.getFilename(),
+									((VersionResponse) requestToFileserver(si, new VersionRequest(request.getFilename()))).getVersion(),
+									((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize()
+									),
+									si.getAddress(),
+									si.getPort()
+							)
+							);
+				}
 			}
 		}
 		/**
@@ -453,11 +543,11 @@ public class Proxy implements IProxyCli, Runnable {
 			}
 			//credits hinzufuegen
 			synchronized(userInfoList){
-			if(uploaded){
-				UserInfo userinfo = userInfoList.get(currentUser);
-				userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()+(2*request.getContent().length), userinfo.isOnline()));
-				System.out.println("Credits successfully added.");
-			}
+				if(uploaded){
+					UserInfo userinfo = userInfoList.get(currentUser);
+					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()+(2*request.getContent().length), userinfo.isOnline()));
+					System.out.println("Credits successfully added.");
+				}
 			}
 			return messageresponse;
 		}
@@ -467,13 +557,24 @@ public class Proxy implements IProxyCli, Runnable {
 		@Override
 		public MessageResponse logout() throws IOException {
 			synchronized(userInfoList){
-			System.out.println("loging out "+currentUser);
-			UserInfo userinfo = userInfoList.get(currentUser);
-			userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), false));
-			currentUser = null;
-			return new MessageResponse(userinfo.getName()+" successfully logged out.");
+				System.out.println("loging out "+currentUser);
+				UserInfo userinfo = userInfoList.get(currentUser);
+				userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), false));
+				currentUser = null;
+				return new MessageResponse(userinfo.getName()+" successfully logged out.");
 			}
 		}
 	}
-	
+	public static byte[] serialize(Object obj) throws IOException {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		ObjectOutputStream os = new ObjectOutputStream(out);
+		os.writeObject(obj);
+		return out.toByteArray();
+	}
+	public static Object deserialize(byte[] data) throws IOException, ClassNotFoundException {
+		ByteArrayInputStream in = new ByteArrayInputStream(data);
+		ObjectInputStream is = new ObjectInputStream(in);
+		return is.readObject();
+	}
+
 }
