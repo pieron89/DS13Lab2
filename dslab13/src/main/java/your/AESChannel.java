@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.Security;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -12,6 +13,8 @@ import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 public class AESChannel extends ChannelDecorator {
 
 	private SecretKey secretKey;
@@ -19,6 +22,7 @@ public class AESChannel extends ChannelDecorator {
 	
 	public AESChannel(Channel decoratorChannel) {
 		super(decoratorChannel);
+		Security.addProvider(new BouncyCastleProvider());
 		//this.secretKey = secretKey;
 		//this.iv = iv;
 		// TODO Auto-generated constructor stub

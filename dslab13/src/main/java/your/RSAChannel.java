@@ -8,12 +8,14 @@ import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.Security;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.PEMReader;
 import org.bouncycastle.openssl.PasswordFinder;
 
@@ -25,6 +27,7 @@ public class RSAChannel extends ChannelDecorator{
 
 	public RSAChannel(Channel decoratorChannel) {
 		super(decoratorChannel);
+		Security.addProvider(new BouncyCastleProvider());
 		//this.pathToPublicKey = pathToPublicKey;
 		// TODO Auto-generated constructor stub
 	}
