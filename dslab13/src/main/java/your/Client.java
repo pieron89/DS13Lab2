@@ -143,8 +143,11 @@ public class Client implements Runnable,IClientCli{
 						AES64ProxyChannel.setAESSecretKey(new SecretKeySpec(Base64.decode(okres.getSecretKey()), 0, 
 								Base64.decode(okres.getSecretKey()).length, "AES"));
 						AES64ProxyChannel.setAESiv(Base64.decode(okres.getIv()));
+						System.out.println("sending");
 						AES64ProxyChannel.send(okres.getProxyChallenge());
-						Object successResponse = AES64ProxyChannel.receive();
+						System.out.println("receiving");
+						Object successResponse = deserialize(AES64ProxyChannel.receive());
+						System.out.println("received");
 						if(successResponse instanceof LoginResponse){
 							LoginResponse loginResponse = (LoginResponse) successResponse;
 							System.out.println("SuccessResponse received!");
