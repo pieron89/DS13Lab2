@@ -16,6 +16,7 @@ import java.net.SocketTimeoutException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
@@ -401,16 +402,16 @@ public class Proxy implements IProxyCli, Runnable {
 				generator.init(256); 
 				SecretKey secretKey = generator.generateKey();
 				byte[] secretKeyBase64 = Base64.encode(secretKey.getEncoded());
-				secretKey = new SecretKeySpec(secretKeyBase64, 0, secretKeyBase64.length, "AES");
+				//secretKey = new SecretKeySpec(secretKeyBase64, 0, secretKeyBase64.length, "AES");
 				//sending 2nd message
 				RSA64TCPChannel.send(serialize(new OkResponse(Base64.encode(request.getclientChallenge()), Base64.encode(proxyChallenge), secretKeyBase64, Base64.encode(iv))));
-				byte[] response = RSA64TCPChannel.receive();
-				if(response.toString().equals(proxyChallenge)){
+				AES64TCPChannel.setAESSecretKey(secretKey);
+				AES64TCPChannel.setAESiv(iv);
+				byte[] response = AES64TCPChannel.receive();
+				if(Arrays.equals(response, (proxyChallenge))){
 					currentUser = request.getUsername();
 					UserInfo userinfo = userInfoList.get(currentUser);
 					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
-					AES64TCPChannel.setAESSecretKey(secretKey);
-					AES64TCPChannel.setAESiv(iv);
 					return new LoginResponse(Type.SUCCESS);
 				}
 			return new LoginResponse(Type.WRONG_CREDENTIALS);

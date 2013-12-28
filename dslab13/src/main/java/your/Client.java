@@ -15,6 +15,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 import javax.crypto.spec.SecretKeySpec;
 
@@ -132,9 +133,9 @@ public class Client implements Runnable,IClientCli{
 				if(responseob instanceof OkResponse){
 					System.out.println("Answer is Instance of OkResponse!");
 					okres = (OkResponse) responseob;
-					System.out.println(okres.getClientChallenge());
+					System.out.println(Base64.decode(okres.getClientChallenge()));
 					System.out.println(clientChallenge);
-					if(okres.getClientChallenge().equals(clientChallenge)){
+					if(Arrays.equals(Base64.decode(okres.getClientChallenge()),(clientChallenge))){
 						System.out.println("ClientChallenge check passed!");
 						byte[] proxyChallenge = new byte[32];
 						proxyChallenge = okres.getProxyChallenge();
