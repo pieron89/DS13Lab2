@@ -10,10 +10,10 @@ public class OkResponse implements Response {
 	
 	private final byte[] clientChallenge;
 	private final byte[] proxyChallenge;
-	private final SecretKey secretKey;
+	private final byte[] secretKey;
 	private final byte[] iv;
 
-	public OkResponse(byte[] clientChallenge, byte[] proxyChallenge, SecretKey secretKey, byte[] iv) {
+	public OkResponse(byte[] clientChallenge, byte[] proxyChallenge, byte[] secretKey, byte[] iv) {
 		this.clientChallenge = clientChallenge;
 		this.proxyChallenge = proxyChallenge;
 		this.secretKey = secretKey;
@@ -28,7 +28,11 @@ public class OkResponse implements Response {
 		return proxyChallenge;
 	}
 	
-	public SecretKey getSecretKey() {
+//	public SecretKey getSecretKey() {
+//		return secretKey;
+//	}
+	
+	public byte[] getSecretKey() {
 		return secretKey;
 	}
 	

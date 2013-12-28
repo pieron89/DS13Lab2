@@ -403,7 +403,7 @@ public class Proxy implements IProxyCli, Runnable {
 				byte[] secretKeyBase64 = Base64.encode(secretKey.getEncoded());
 				secretKey = new SecretKeySpec(secretKeyBase64, 0, secretKeyBase64.length, "AES");
 				//sending 2nd message
-				RSA64TCPChannel.send(serialize(new OkResponse(Base64.encode(request.getclientChallenge()), Base64.encode(proxyChallenge), secretKey, Base64.encode(iv))));
+				RSA64TCPChannel.send(serialize(new OkResponse(Base64.encode(request.getclientChallenge()), Base64.encode(proxyChallenge), secretKeyBase64, Base64.encode(iv))));
 				byte[] response = RSA64TCPChannel.receive();
 				if(response.toString().equals(proxyChallenge)){
 					currentUser = request.getUsername();

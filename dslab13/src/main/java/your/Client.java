@@ -16,6 +16,8 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.security.SecureRandom;
 
+import javax.crypto.spec.SecretKeySpec;
+
 import org.bouncycastle.util.encoders.Base64;
 
 import util.Config;
@@ -130,7 +132,8 @@ public class Client implements Runnable,IClientCli{
 				if(responseob instanceof OkResponse){
 					System.out.println("Answer is Instance of OkResponse!");
 					okres = (OkResponse) responseob;
-
+					System.out.println(okres.getClientChallenge());
+					System.out.println(clientChallenge);
 					if(okres.getClientChallenge().equals(clientChallenge)){
 						System.out.println("ClientChallenge check passed!");
 						byte[] proxyChallenge = new byte[32];
@@ -142,7 +145,7 @@ public class Client implements Runnable,IClientCli{
 							System.out.println("SuccessResponse received!");
 							if(loginResponse.getType()==Type.SUCCESS){
 								System.out.println("Secure connection established!");
-								AES64ProxyChannel.setAESSecretKey(okres.getSecretKey());
+								AES64ProxyChannel.setAESSecretKey(new SecretKeySpec(okres.getSecretKey(), 0, okres.getSecretKey().length, "AES"));
 								AES64ProxyChannel.setAESiv(okres.getIv());
 								return (LoginResponse) successResponse;
 							}
