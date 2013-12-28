@@ -102,7 +102,7 @@ public class RSAChannel extends ChannelDecorator{
 		}
 	}
 
-	public void setPrivateKey(String pathToPublicKey, final char[] password){
+	public void setPrivateKey(String pathToPublicKey, final String password){
 		String pathToPrivateKey = null;
 		PEMReader in;
 		try {
@@ -112,7 +112,7 @@ public class RSAChannel extends ChannelDecorator{
 				public char[] getPassword() {
 					// reads the password from standard input for decrypting the private key
 					//System.out.println("Enter pass phrase:");
-					return password;
+					return password.toCharArray();
 				}
 
 			});
