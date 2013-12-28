@@ -305,7 +305,7 @@ public class Proxy implements IProxyCli, Runnable {
 						request = deserialize(RSA64TCPChannel.receive());
 						if(request.getClass()==LoginChallengeRequest.class){
 							if(!userInfoList.get(((LoginChallengeRequest) request).getUsername()).isOnline()){
-								login((LoginChallengeRequest) request);
+								AES64TCPChannel.send(serialize(login((LoginChallengeRequest) request)));
 							}
 						}
 					}else{
