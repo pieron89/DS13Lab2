@@ -154,6 +154,7 @@ public class Client implements Runnable,IClientCli{
 							System.out.println(loginResponse.getType());
 							if(loginResponse.getType()==Type.SUCCESS){
 								System.out.println("Secure connection established!");
+								userPrivateKeyPath = privateKeyPathFile.getAbsolutePath();
 								return (LoginResponse) successResponse;
 							}
 							System.out.println("Failure to establish secure Connection!");
