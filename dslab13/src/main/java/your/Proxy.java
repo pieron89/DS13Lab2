@@ -224,7 +224,6 @@ public class Proxy implements IProxyCli, Runnable {
 					datagramSocket = new DatagramSocket(proxyConfig.getInt("udp.port"));
 					datagramSocket.setSoTimeout(1200);
 					byte[] buf = new byte[256];
-
 					while(true){
 						long curTime = Calendar.getInstance().getTimeInMillis();
 						DatagramPacket packet = new DatagramPacket(buf, buf.length);
@@ -475,8 +474,8 @@ public class Proxy implements IProxyCli, Runnable {
 		public Response download(DownloadTicketRequest request) throws IOException {
 			System.out.println("Received Downloadticketrequest from "+currentUser);
 			Set<String> keyset = fileServerInfoList.keySet(); 
-			synchronized(fileServerInfoList){
-				synchronized(userInfoList){
+			//synchronized(fileServerInfoList){
+				//synchronized(userInfoList){
 					//wenn keine fileserver online
 					if(keyset.isEmpty()){
 						System.out.println("No fileservers online at the time.");
@@ -526,8 +525,8 @@ public class Proxy implements IProxyCli, Runnable {
 									si.getPort()
 							)
 							);
-				}
-			}
+				//}
+			//}
 		}
 		/**
 		 * @see proxy.IProxy#upload(message.request.UploadRequest)
