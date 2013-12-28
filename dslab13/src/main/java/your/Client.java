@@ -269,7 +269,7 @@ public class Client implements Runnable,IClientCli{
 				//			Object response =  proxyInstream.readObject();
 
 				AES64ProxyChannel.send(serialize(new ListRequest()));
-				Object response = AES64ProxyChannel.receive();
+				Object response = deserialize(AES64ProxyChannel.receive());
 				if(response.getClass()==MessageResponse.class){
 					return (MessageResponse) response;
 				}
@@ -305,7 +305,7 @@ public class Client implements Runnable,IClientCli{
 				//			Object response = proxyInstream.readObject();
 
 				AES64ProxyChannel.send(serialize(new DownloadTicketRequest(filename)));
-				Object response = AES64ProxyChannel.receive();
+				Object response = deserialize(AES64ProxyChannel.receive());
 				//Wenn kein downloadticket zurueckkommt
 				if(response.getClass()==MessageResponse.class){
 					return (MessageResponse) response;
