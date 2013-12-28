@@ -1,6 +1,8 @@
 package your;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -12,6 +14,9 @@ import java.net.ConnectException;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.security.SecureRandom;
+
+import org.bouncycastle.util.encoders.Base64;
 
 import util.Config;
 import cli.Command;
@@ -23,7 +28,7 @@ import message.request.CreditsRequest;
 import message.request.DownloadFileRequest;
 import message.request.DownloadTicketRequest;
 import message.request.ListRequest;
-import message.request.LoginRequest;
+import message.request.LoginChallengeRequest;
 import message.request.LogoutRequest;
 import message.request.UploadRequest;
 import message.response.BuyResponse;
@@ -33,42 +38,58 @@ import message.response.DownloadTicketResponse;
 import message.response.ListResponse;
 import message.response.LoginResponse;
 import message.response.MessageResponse;
+import message.response.OkResponse;
+import message.response.LoginResponse.Type;
 
 public class Client implements Runnable,IClientCli{
 
 	//config and shell for client
-	//und dis ist ein test
 	Config clientConfig;
+	Config userConfig;
 	Shell clientShell;
 	Thread shellThread;
 	Thread cliproxThread;
-	//client-proxy socket and streams
-	Socket proxySocket;
-	ObjectInputStream proxyInstream;
-	ObjectOutputStream proxyOutstream;
+	//client-proxy socket and streams	
+	//	Socket proxySocket;
+	//	ObjectInputStream proxyInstream;
+	//	ObjectOutputStream proxyOutstream;
+
+	Channel proxyChannel;
+	RSAChannel RSA64ProxyChannel;
+	AESChannel AES64ProxyChannel;
 	//client-fileserver socket and streams
 	Socket fileserverSocket;
 	ObjectInputStream fileserverInstream;
 	ObjectOutputStream fileserverOutstream;
 
+	//current UserPrivateKeyPath
+	String userPrivateKeyPath=null;
+
+
 	public Client(Config clientConfig, Shell clientShell) {
 		this.clientConfig=clientConfig;
 		this.clientShell=clientShell;
+		userConfig = new Config("user");
 		this.clientShell.register(this); //register methodes marked with Command
 		shellThread = new Thread(clientShell);
-		
+
 	}
-	
+
 	@Override
 	public void run() {
 		//shellThread.start();
 		try {
-			this.proxySocket = new Socket(clientConfig.getString("proxy.host"), clientConfig.getInt("proxy.tcp.port"));
-			this.proxyOutstream = new ObjectOutputStream(proxySocket.getOutputStream());
-			this.proxyInstream = new ObjectInputStream(proxySocket.getInputStream());
-			shellThread.start();
+			//			this.proxySocket = new Socket(clientConfig.getString("proxy.host"), clientConfig.getInt("proxy.tcp.port"));
+			//			this.proxyOutstream = new ObjectOutputStream(proxySocket.getOutputStream());
+			//			this.proxyInstream = new ObjectInputStream(proxySocket.getInputStream());
+			//			shellThread.start();
+			//
+			//			System.out.println("Connection to Proxy established.");
 
-			System.out.println("Connection to Proxy established.");
+			proxyChannel = new TCPChannel(new Socket(clientConfig.getString("proxy.host"), clientConfig.getInt("proxy.tcp.port")));
+			RSA64ProxyChannel = new RSAChannel(new Base64Channel(proxyChannel));
+			AES64ProxyChannel = new AESChannel(new Base64Channel(proxyChannel));
+			shellThread.start();
 
 		} catch(ConnectException e){
 			System.out.println("Proxy offline, restart Client.");
@@ -76,32 +97,84 @@ public class Client implements Runnable,IClientCli{
 			//System.out.println("Lost Connection to Proxy");
 		}
 	}
-	
+
 	/**
 	 * @see client.IClientCli#login(java.lang.String, java.lang.String)
 	 */
 	@Override
-	@Command
 	public LoginResponse login(String username, String password) throws IOException {
-		
-		Response loginresponse = null;
+		return null;
+	}
+
+	@Command
+	public LoginResponse login(String username) throws IOException {
+
+		Object responseob = null;
+
+		SecureRandom random = new SecureRandom();
+		byte[] clientChallenge = new byte[32];
+		random.nextBytes(clientChallenge);
+		clientChallenge = Base64.encode(clientChallenge);
+		OkResponse okres = null;
+		File privateKeyPathFile = new File(clientConfig.getString("keys.dir")+"/"+username+".pem");
+
 		try {
-			proxyOutstream.writeObject(new LoginRequest(username, password));
-			loginresponse = (Response) proxyInstream.readObject();
-			if(loginresponse.getClass()==MessageResponse.class){
-				System.out.println(loginresponse);
-				return null;
+			//proxyOutstream.writeObject(new LoginRequest(username, password));
+			//RSA64ProxyChannel.send(serialize(new LoginRequest(username, password)));
+			if(privateKeyPathFile.exists()){
+				System.out.println("Userkeyfile exists!");
+				RSA64ProxyChannel.setPrivateKey(privateKeyPathFile.getAbsolutePath(), userConfig.getString(username+".password"));
+				RSA64ProxyChannel.setPublicKey(clientConfig.getString("proxy.key"));	
+				RSA64ProxyChannel.send(serialize(new LoginChallengeRequest(username, clientChallenge)));
+				responseob = deserialize(RSA64ProxyChannel.receive());
+				if(responseob instanceof OkResponse){
+					System.out.println("Answer is Instance of OkResponse!");
+					okres = (OkResponse) responseob;
+
+					if(okres.getClientChallenge().equals(clientChallenge)){
+						System.out.println("ClientChallenge check passed!");
+						byte[] proxyChallenge = new byte[32];
+						proxyChallenge = okres.getProxyChallenge();
+						AES64ProxyChannel.send(proxyChallenge);
+						Object successResponse = AES64ProxyChannel.receive();
+						if(successResponse instanceof LoginResponse){
+							LoginResponse loginResponse = (LoginResponse) successResponse;
+							System.out.println("SuccessResponse received!");
+							if(loginResponse.getType()==Type.SUCCESS){
+								System.out.println("Secure connection established!");
+								AES64ProxyChannel.setAESSecretKey(okres.getSecretKey());
+								AES64ProxyChannel.setAESiv(okres.getIv());
+								return (LoginResponse) successResponse;
+							}
+							System.out.println("Failure to establish secure Connection!");
+						}
+						System.out.println("SuccessResponse failure!");
+					}
+					System.out.println("ClientChallenge check failed!");
+				}
+				System.out.println("Answer is no Instance of OkResponse!");
 			}
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			System.out.println("Userkeyfile doesnt exist!");
+			//			if(loginresponse.getClass()==MessageResponse.class){
+			//				System.out.println(loginresponse);
+			//				return null;
+			//			}
+
+
+
 		} catch (NullPointerException e) {
 			System.out.println("Proxy offline, restart Client.");
 			exit();
 		} catch (SocketException e){
 			System.out.println("Proxy offline, restart Client.");
 			exit();
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
-		return (LoginResponse) loginresponse;
+		userPrivateKeyPath=null;
+		System.out.println("Error 37: Something went wrong!");
+		return new LoginResponse(Type.WRONG_CREDENTIALS);
 	}
 	/**
 	 * @see client.IClientCli#credits()
@@ -109,22 +182,32 @@ public class Client implements Runnable,IClientCli{
 	@Override
 	@Command
 	public Response credits() throws IOException {
-		
-		CreditsResponse creditsresponse = null;
-		try {
-			proxyOutstream.writeObject(new CreditsRequest());
-			creditsresponse = (CreditsResponse) proxyInstream.readObject();
-			System.out.println(creditsresponse);
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (NullPointerException e) {
-			System.out.println("Proxy offline, restart Client.");
-			exit();
-		} catch (SocketException e){
-			System.out.println("Proxy offline, restart Client.");
-			exit();
+
+		if(userLoggedIn()){
+			CreditsResponse creditsresponse = null;
+			try {
+				AES64ProxyChannel.send(serialize(new CreditsRequest()));
+				//	proxyOutstream.writeObject(new CreditsRequest());
+				//	creditsresponse = (CreditsResponse) proxyInstream.readObject();
+
+				creditsresponse = (CreditsResponse) deserialize(AES64ProxyChannel.receive());
+				System.out.println(creditsresponse);
+			} catch (NullPointerException e) {
+				System.out.println("Proxy offline, restart Client.");
+				exit();
+			} catch (SocketException e){
+				System.out.println("Proxy offline, restart Client.");
+				exit();
+			} catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			return creditsresponse;
+		}else{
+			MessageResponse response = new MessageResponse("Failure");
+			return response;
 		}
-		return creditsresponse;
+
 	}
 	/**
 	 * @see client.IClientCli#buy(long)
@@ -132,21 +215,29 @@ public class Client implements Runnable,IClientCli{
 	@Override
 	@Command
 	public Response buy(long credits) throws IOException {
-		
-		BuyResponse buyresponse = null;
-		try {
-			proxyOutstream.writeObject(new BuyRequest(credits));
-			buyresponse = (BuyResponse) proxyInstream.readObject();
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (NullPointerException e) {
-			System.out.println("Proxy offline, restart Client.");
-			exit();
-		} catch (SocketException e){
-			System.out.println("Proxy offline, restart Client.");
-			exit();
+
+		if(userLoggedIn()){
+			BuyResponse buyresponse = null;
+			try {
+				//			proxyOutstream.writeObject(new BuyRequest(credits));
+				//			buyresponse = (BuyResponse) proxyInstream.readObject();
+				AES64ProxyChannel.send(serialize(new BuyRequest(credits)));
+				buyresponse = (BuyResponse) deserialize(AES64ProxyChannel.receive());			
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+			} catch (NullPointerException e) {
+				System.out.println("Proxy offline, restart Client.");
+				exit();
+			} catch (SocketException e){
+				System.out.println("Proxy offline, restart Client.");
+				exit();
+			}
+			return buyresponse;
+		}else{
+			MessageResponse response = new MessageResponse("Failure");
+			return response;
 		}
-		return buyresponse;
+
 	}
 	/**
 	 * @see client.IClientCli#list()
@@ -154,25 +245,34 @@ public class Client implements Runnable,IClientCli{
 	@Override
 	@Command
 	public Response list() throws IOException {
-		
-		ListResponse listresponse = null;
-		try {
-			proxyOutstream.writeObject(new ListRequest());
-			Object response =  proxyInstream.readObject();
-			if(response.getClass()==MessageResponse.class){
-				return (MessageResponse) response;
+
+		if(userLoggedIn()){
+			ListResponse listresponse = null;
+			try {
+				//			proxyOutstream.writeObject(new ListRequest());
+				//			Object response =  proxyInstream.readObject();
+
+				AES64ProxyChannel.send(serialize(new ListRequest()));
+				Object response = AES64ProxyChannel.receive();
+				if(response.getClass()==MessageResponse.class){
+					return (MessageResponse) response;
+				}
+				listresponse = (ListResponse) response;
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+			} catch (NullPointerException e) {
+				System.out.println("Proxy offline, restart Client.");
+				exit();
+			} catch (SocketException e){
+				System.out.println("Proxy offline, restart Client.");
+				exit();
 			}
-			listresponse = (ListResponse) response;
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (NullPointerException e) {
-			System.out.println("Proxy offline, restart Client.");
-			exit();
-		} catch (SocketException e){
-			System.out.println("Proxy offline, restart Client.");
-			exit();
+			return listresponse;
+		}else{
+			MessageResponse response = new MessageResponse("Failure");
+			return response;
 		}
-		return listresponse;
+
 	}
 	/**
 	 * @see client.IClientCli#download(java.lang.String)
@@ -180,69 +280,78 @@ public class Client implements Runnable,IClientCli{
 	@Override
 	@Command
 	public Response download(String filename) throws IOException {
-		
-		DownloadTicketResponse dtr = null;
-		DownloadFileResponse dfr = null;
-		try {
-			proxyOutstream.writeObject(new DownloadTicketRequest(filename));
-			Object response = proxyInstream.readObject();
-			//Wenn kein downloadticket zurueckkommt
-			if(response.getClass()==MessageResponse.class){
-				return (MessageResponse) response;
-			}
-			dtr = (DownloadTicketResponse) response;
-			System.out.println("Received Downloadticket from Proxy.");
-			//Socket zum Fileserver1
+
+		if(userLoggedIn()){
+			DownloadTicketResponse dtr = null;
+			DownloadFileResponse dfr = null;
 			try {
-				fileserverSocket = new Socket(dtr.getTicket().getAddress(), dtr.getTicket().getPort());
-				fileserverOutstream = new ObjectOutputStream(fileserverSocket.getOutputStream());
-				fileserverInstream = new ObjectInputStream(fileserverSocket.getInputStream());
+				//			proxyOutstream.writeObject(new DownloadTicketRequest(filename));
+				//			Object response = proxyInstream.readObject();
 
-				System.out.println("Client connected to Fileserver: "+dtr.getTicket().getPort());
-
-				fileserverOutstream.writeObject(new DownloadFileRequest(dtr.getTicket()));
-				Object downloadresponse = fileserverInstream.readObject();
-				if(downloadresponse.getClass()==MessageResponse.class){
-					return (MessageResponse) downloadresponse;
+				AES64ProxyChannel.send(serialize(new DownloadTicketRequest(filename)));
+				Object response = AES64ProxyChannel.receive();
+				//Wenn kein downloadticket zurueckkommt
+				if(response.getClass()==MessageResponse.class){
+					return (MessageResponse) response;
 				}
-				dfr = (DownloadFileResponse) downloadresponse;
-
-				System.out.println("Received DownloadFileResponse from Fileserver.");
-
-				Writer writer = null;
-				File downloadfile = new File(clientConfig.getString("download.dir")+"/"+dfr.getTicket().getFilename());
-				if(downloadfile.exists()){
-					System.out.println("Deleting "+filename+" because it already exists.");
-					downloadfile.delete();
-				}
+				dtr = (DownloadTicketResponse) response;
+				System.out.println("Received Downloadticket from Proxy.");
+				//Socket zum Fileserver1
 				try {
-					writer = new FileWriter(downloadfile);
-					writer.write(new String(dfr.getContent()));
+					fileserverSocket = new Socket(dtr.getTicket().getAddress(), dtr.getTicket().getPort());
+					fileserverOutstream = new ObjectOutputStream(fileserverSocket.getOutputStream());
+					fileserverInstream = new ObjectInputStream(fileserverSocket.getInputStream());
+
+					System.out.println("Client connected to Fileserver: "+dtr.getTicket().getPort());
+
+					fileserverOutstream.writeObject(new DownloadFileRequest(dtr.getTicket()));
+					Object downloadresponse = fileserverInstream.readObject();
+					if(downloadresponse.getClass()==MessageResponse.class){
+						return (MessageResponse) downloadresponse;
+					}
+					dfr = (DownloadFileResponse) downloadresponse;
+
+					System.out.println("Received DownloadFileResponse from Fileserver.");
+
+					Writer writer = null;
+					File downloadfile = new File(clientConfig.getString("download.dir")+"/"+dfr.getTicket().getFilename());
+					if(downloadfile.exists()){
+						System.out.println("Deleting "+filename+" because it already exists.");
+						downloadfile.delete();
+					}
+					try {
+						writer = new FileWriter(downloadfile);
+						writer.write(new String(dfr.getContent()));
+					} catch (IOException e) {
+						System.out.println("Could not write File: "+filename);
+					} finally {
+						if (writer != null)
+							try {
+								writer.close();
+							} catch (IOException e) {
+							}
+					}
+				} catch (UnknownHostException e) {
+					e.printStackTrace();
 				} catch (IOException e) {
-					System.out.println("Could not write File: "+filename);
-				} finally {
-					if (writer != null)
-						try {
-							writer.close();
-						} catch (IOException e) {
-						}
+					e.printStackTrace();
 				}
-			} catch (UnknownHostException e) {
+			} catch (ClassNotFoundException e) {
 				e.printStackTrace();
-			} catch (IOException e) {
-				e.printStackTrace();
+			} catch (NullPointerException e) {
+				System.out.println("Proxy offline, restart Client.");
+				exit();
+			} catch (SocketException e){
+				System.out.println("Proxy offline, restart Client.");
+				exit();
 			}
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (NullPointerException e) {
-			System.out.println("Proxy offline, restart Client.");
-			exit();
-		} catch (SocketException e){
-			System.out.println("Proxy offline, restart Client.");
-			exit();
+			//return new MessageResponse("File successfully downloaded.");
+			return dfr;
+		}else{
+			MessageResponse response = new MessageResponse("Failure");
+			return response;
 		}
-		//return new MessageResponse("File successfully downloaded.");
-		return dfr;
+
 	}
 	/**
 	 * @see client.IClientCli#upload(java.lang.String)
@@ -250,34 +359,42 @@ public class Client implements Runnable,IClientCli{
 	@Override
 	@Command
 	public MessageResponse upload(String filename) throws IOException {
-		
-		File uploadfile = new File(clientConfig.getString("download.dir")+"/"+filename);
-		BufferedReader bufferedreader = new BufferedReader(new FileReader(uploadfile));
-		String line = null;
-		StringBuilder stringbuilder = new StringBuilder();
-		String lineseperator = System.getProperty("line.separator");
-		
-		synchronized(stringbuilder){
-		while((line = bufferedreader.readLine()) != null) {
-			stringbuilder.append(line);
-			stringbuilder.append(lineseperator);
-		}
-		bufferedreader.close();
-		System.out.println("Uploading the following File: "+filename);
-		MessageResponse uploadresponse = null;
-		try {
-			proxyOutstream.writeObject(new UploadRequest(filename, 1, (stringbuilder.toString()).getBytes()));
-			uploadresponse = (MessageResponse) proxyInstream.readObject();
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (NullPointerException e) {
-			System.out.println("Proxy offline, restart Client.");
-			exit();
-		} catch (SocketException e){
-			System.out.println("Proxy offline, restart Client.");
-			exit();
-		}
-		return uploadresponse;
+
+		if(userLoggedIn()){
+			File uploadfile = new File(clientConfig.getString("download.dir")+"/"+filename);
+			BufferedReader bufferedreader = new BufferedReader(new FileReader(uploadfile));
+			String line = null;
+			StringBuilder stringbuilder = new StringBuilder();
+			String lineseperator = System.getProperty("line.separator");
+
+			synchronized(stringbuilder){
+				while((line = bufferedreader.readLine()) != null) {
+					stringbuilder.append(line);
+					stringbuilder.append(lineseperator);
+				}
+				bufferedreader.close();
+				System.out.println("Uploading the following File: "+filename);
+				MessageResponse uploadresponse = null;
+				try {
+					//			proxyOutstream.writeObject(new UploadRequest(filename, 1, (stringbuilder.toString()).getBytes()));
+					//			uploadresponse = (MessageResponse) proxyInstream.readObject();
+
+					AES64ProxyChannel.send(serialize(new UploadRequest(filename, 1, (stringbuilder.toString()).getBytes())));
+					uploadresponse = (MessageResponse) deserialize(AES64ProxyChannel.receive());
+				} catch (ClassNotFoundException e) {
+					e.printStackTrace();
+				} catch (NullPointerException e) {
+					System.out.println("Proxy offline, restart Client.");
+					exit();
+				} catch (SocketException e){
+					System.out.println("Proxy offline, restart Client.");
+					exit();
+				}
+				return uploadresponse;
+			}
+		}else{
+			MessageResponse response = new MessageResponse("Failure");
+			return response;
 		}
 	}
 	/**
@@ -287,10 +404,16 @@ public class Client implements Runnable,IClientCli{
 	@Command
 	public MessageResponse logout() throws IOException {
 		
+		if(userLoggedIn()){
 		MessageResponse logoutresponse = null;
 		try {
-			proxyOutstream.writeObject(new LogoutRequest());
-			logoutresponse = (MessageResponse) proxyInstream.readObject();
+			//			proxyOutstream.writeObject(new LogoutRequest());
+			//			logoutresponse = (MessageResponse) proxyInstream.readObject();
+
+			AES64ProxyChannel.send(serialize(new LogoutRequest()));
+			logoutresponse = (MessageResponse) deserialize(AES64ProxyChannel.receive());
+			userPrivateKeyPath = "";
+
 		} catch (ClassNotFoundException e) {
 			e.printStackTrace();
 		} catch (NullPointerException e) {
@@ -301,6 +424,10 @@ public class Client implements Runnable,IClientCli{
 			exit();
 		}
 		return logoutresponse;
+		}else{
+			MessageResponse response = new MessageResponse("Failure");
+			return response;
+		}
 	}
 	/**
 	 * @see client.IClientCli#exit()
@@ -308,11 +435,31 @@ public class Client implements Runnable,IClientCli{
 	@Override
 	@Command
 	public MessageResponse exit() throws IOException {
-		
-		proxySocket.close();
+
+		//RSA64ProxyChannel.
+		//proxySocket.close();
 		System.in.close();
 		return new MessageResponse("Client exited successfully.");
 	}
 
+	public byte[] serialize(Object obj) throws IOException {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		ObjectOutputStream os = new ObjectOutputStream(out);
+		os.writeObject(obj);
+		return out.toByteArray();
+	}
+
+	public Object deserialize(byte[] data) throws IOException, ClassNotFoundException {
+		ByteArrayInputStream in = new ByteArrayInputStream(data);
+		ObjectInputStream is = new ObjectInputStream(in);
+		return is.readObject();
+	}
+
+	public boolean userLoggedIn(){
+		if(userPrivateKeyPath!=null){
+			return true;
+		}
+		return false;
+	}
 
 }
