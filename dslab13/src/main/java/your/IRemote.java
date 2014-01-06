@@ -5,16 +5,16 @@ import java.util.ArrayList;
 
 public interface IRemote extends Remote{
 	
-	public Object getReadQuorum();
+	public int readQuorum();
 	
-	public Object getWriteQuorum();
+	public int writeQuorum();
 	
-	public ArrayList<String> getTopThree();
+	public ArrayList<String> topThreeDownloads();
 	
-	public void subscribe(String user, String file);
+	public void subscribe(String filename, int count, Object callback);
 	
-	public byte[] gatherPublicKey();
+	public byte[] getProxyPublicKey();
 	
-	public void transmitPublicKey(byte[] key);
+	public void setUserPublicKey(String username, byte[] key);
 
 }
