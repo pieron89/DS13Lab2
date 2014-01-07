@@ -15,8 +15,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Set;
 
 import message.Response;
 import message.request.DownloadFileRequest;
@@ -29,12 +29,12 @@ import message.response.InfoResponse;
 import message.response.ListResponse;
 import message.response.MessageResponse;
 import message.response.VersionResponse;
-import cli.Command;
-import cli.Shell;
 import server.IFileServer;
 import server.IFileServerCli;
 import util.ChecksumUtils;
 import util.Config;
+import cli.Command;
+import cli.Shell;
 
 public class Fileserver implements Runnable,IFileServerCli{
 
@@ -44,7 +44,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 	Thread isAliveSending;
 	DatagramSocket datagramSocket;
 	ServerSocket serverSocket;
-	Set<String> fileList;
+	HashMap<String, Integer> fileList;
 	AliveSender packetSender;
 
 	public Fileserver(Config filesConfig, Shell filesShell){
@@ -60,7 +60,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 		packetSender = new AliveSender();
 		isAliveSending = new Thread(packetSender);
 		isAliveSending.start();
-		fileList = new HashSet<String>();
+		fileList = new HashMap<String, Integer>();
 
 		try {
 			serverSocket = new ServerSocket(filesConfig.getInt("tcp.port"));
@@ -145,9 +145,9 @@ public class Fileserver implements Runnable,IFileServerCli{
 			synchronized(fileList){
 			File[] filearray = new File(filesConfig.getString("fileserver.dir")).listFiles();
 			for(File listfile : filearray){
-				fileList.add(listfile.getName());
+				fileList.put(listfile.getName(), 0);
 			}
-			return new ListResponse(fileList);
+			return new ListResponse(fileList.keySet());
 			}
 		}
 		/**
@@ -185,7 +185,14 @@ public class Fileserver implements Runnable,IFileServerCli{
 		@Override
 		public Response version(VersionRequest request) throws IOException {
 			System.out.println("Received VersionRequest from Proxy.");
-			return new VersionResponse(request.getFilename(),1);
+			if(fileList.isEmpty()){
+				list();
+			}
+			if(fileList.containsKey(request.getFilename())){
+				return new VersionResponse(request.getFilename(), fileList.get(request.getFilename()));	
+			}
+			return new MessageResponse("File does not exist on the server.");
+			
 		}
 		/**
 		 * @see server.IFileServer#upload(message.request.UploadRequest)
@@ -195,6 +202,17 @@ public class Fileserver implements Runnable,IFileServerCli{
 			System.out.println("Received UploadRequest from Proxy.");
 			System.out.println("Uploading the following File: "+request.getFilename());
 
+			if(fileList.containsKey(request.getFilename())){
+					int version;
+					String name;
+					name = request.getFilename();
+					version = fileList.get(name) + 1;
+					fileList.remove(name);
+					fileList.put(name, version);					
+			} else {
+				fileList.put(request.getFilename(), request.getVersion());
+			}
+			
 			Writer writer = null;
 			File uploadfile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getFilename());
 			if(uploadfile.exists()){

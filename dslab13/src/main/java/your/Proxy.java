@@ -279,7 +279,11 @@ public class Proxy implements IProxyCli, Runnable {
 		private TCPChannel clientChannel;
 		private RSAChannel RSA64TCPChannel;
 		private AESChannel AES64TCPChannel;
-
+		
+		//variables for gilford versioning, N = number of file servers
+		private int qw = 0;		//write quorum, (N/2 + 1)
+		// private int qr = 0;		//read quorum, qr = qw because lazy
+		
 		public ClientConnection(TCPChannel clientChannel) {
 			//this.clientSocket = clientSocket;
 			this.clientChannel = clientChannel;
@@ -536,14 +540,69 @@ public class Proxy implements IProxyCli, Runnable {
 			System.out.println("Received Uploadrequest from "+currentUser);
 			boolean uploaded = false;
 			MessageResponse messageresponse = new MessageResponse("Could not upload file.");
-			//file zu allen fileservern hochladen
+			
+			
+			//find number of servers and set read/write quorum
+			if(qw == 0){ //should only be done at the first upload according to the assignment
+				int n = 0;
+				for (String s : fileServerInfoList.keySet()){
+					if(fileServerInfoList.get(s).isOnline()){
+						n++;
+					}
+				}
+				qw = n/2 + 1;
+				//qr = n - n/2 + 1;  lazy gifford qw = qr
+			}
+			//find the <qr> servers with lowest load
+			HashMap<Long, FileServerInfo> lowestUsageServers = new HashMap<Long, FileServerInfo>();
+			long highest = 0;
 			for(String s : fileServerInfoList.keySet()){
-				System.out.println("Uploading "+request.getFilename()+" to fileserver: "+fileServerInfoList.get(s).getPort());
-				if(fileServerInfoList.get(s).isOnline()){
-					uploaded = true;
-					messageresponse = (MessageResponse) requestToFileserver(fileServerInfoList.get(s), request);
+				long usage = fileServerInfoList.get(s).getUsage();
+				FileServerInfo fs = fileServerInfoList.get(s);
+				if(fs.isOnline()){
+					if(lowestUsageServers.size() < qw){
+						lowestUsageServers.put(usage, fs);
+						if(usage > highest){
+							highest = usage;
+						}
+					}else if(usage < highest){
+						lowestUsageServers.remove(highest);
+						lowestUsageServers.put(usage, fs);
+						highest = 0;
+						for(long usg : lowestUsageServers.keySet()){
+							if(usg > highest){
+								highest = usg;
+							}
+						}
+					}
 				}
 			}
+			//find the highest version on lowest load servers
+			int version = 0; 
+			for(FileServerInfo fs : lowestUsageServers.values()){
+				Response response = (Response) requestToFileserver(fs, new VersionRequest(request.getFilename()));
+				if(response instanceof VersionResponse){
+					VersionResponse vr = (VersionResponse) response; 
+					if(vr.getVersion() > version){
+						version = vr.getVersion();
+					}
+				} else {
+					//nothing, file does not exist on the server which is expected behavior.
+				}
+			}
+			request = new UploadRequest(request.getFilename(), version + 1, request.getContent());
+		
+			//lazy gifford scheme: qw = gr
+			//upload to the <gw> lowest usage servers
+			for(FileServerInfo fs : lowestUsageServers.values()){
+				System.out.println("Uploading "+request.getFilename()+" to fileserver: "+fs.getPort());
+				uploaded = true;
+				messageresponse = (MessageResponse) requestToFileserver(fs, request);
+			}
+			
+			
+			
+			
 			//credits hinzufuegen
 			synchronized(userInfoList){
 				if(uploaded){
