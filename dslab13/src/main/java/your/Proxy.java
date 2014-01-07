@@ -3,9 +3,12 @@ package your;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Writer;
 import java.net.ConnectException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -13,7 +16,13 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.rmi.AlreadyBoundException;
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,11 +31,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.Set;
+import your.Channel;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 
+import org.bouncycastle.openssl.PEMReader;
 import org.bouncycastle.util.encoders.Base64;
 
 import proxy.IProxy;
@@ -66,10 +76,15 @@ import cli.Shell;
 public class Proxy implements IProxyCli, Runnable {
 	Config proxyConfig;
 	Config userConfig;
+	Config mcConfig;
 	Shell proxyShell;
 	HashMap<String, UserInfo> userInfoList;
 	HashMap<String, FileServerInfo> fileServerInfoList;
 	HashMap<String, Long> isAliveAriveTimes;
+	//stage4 part------------------
+	HashMap<String, Integer> downloadlist;
+	HashMap<String, ClientConnection> clientlist;
+	//-----------------------------
 	List<Socket> clientSocketList;
 	List<Channel> clientChannelList;
 
@@ -79,11 +94,14 @@ public class Proxy implements IProxyCli, Runnable {
 	ServerSocket serverSocket;
 	DatagramSocket datagramSocket;
 	ResourceBundle userResource;
+	
+	private int qw = 0;	
 
 	public Proxy(Config proxyConfig, Shell proxyShell){
 		this.proxyConfig = proxyConfig;
 		this.proxyShell = proxyShell;
 		this.proxyShell.register(this);
+		mcConfig = new Config("mc");
 	}
 
 
@@ -95,6 +113,21 @@ public class Proxy implements IProxyCli, Runnable {
 		fileServerInfoList = new HashMap<String,FileServerInfo>();
 		clientSocketList = new ArrayList<Socket>();
 		clientChannelList = new ArrayList<Channel>();
+		//stage4 part------------------
+		downloadlist = new HashMap<String, Integer>();
+		clientlist = new HashMap<String, ClientConnection>();
+		try {
+			Registry reg = LocateRegistry.createRegistry(mcConfig.getInt("proxy.rmi.port"));
+			Remote bla = new ProxyRemote(this);
+			reg.bind("proxyremote", bla);
+		} catch (RemoteException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		} catch (AlreadyBoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		//-----------------------------
 		isAliveThread = new Thread(new AliveReceiver());
 		isAliveThread.start();
 
@@ -279,9 +312,13 @@ public class Proxy implements IProxyCli, Runnable {
 		private TCPChannel clientChannel;
 		private RSAChannel RSA64TCPChannel;
 		private AESChannel AES64TCPChannel;
+		//stage4 part------------------
+		private ICallback callback;
+		private HashMap<String, Integer> subscribtions = new HashMap<String, Integer>();
+		//-----------------------------
 		
 		//variables for gilford versioning, N = number of file servers
-		private int qw = 0;		//write quorum, (N/2 + 1)
+		//private int qw = 0;		//write quorum, (N/2 + 1)
 		// private int qr = 0;		//read quorum, qr = qw because lazy
 		
 		public ClientConnection(TCPChannel clientChannel) {
@@ -365,16 +402,15 @@ public class Proxy implements IProxyCli, Runnable {
 					}*/
 				}
 			}catch (IOException e) {
-				/*try {
+				try {
 					if(currentUser!=null){
 						logout();
 					}
-					clientSocket.close();
-					inputs.close();
+					clientChannel.close();
 					Thread.currentThread().interrupt();
 				} catch (IOException e1) {
 					e1.printStackTrace();
-				}*/
+				}
 				e.printStackTrace();
 			} catch (ClassNotFoundException e) {
 				e.printStackTrace();
@@ -419,6 +455,11 @@ public class Proxy implements IProxyCli, Runnable {
 					currentUser = request.getUsername();
 					UserInfo userinfo = userInfoList.get(currentUser);
 					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
+					//stage4 part------------------
+					synchronized(clientlist){
+						clientlist.put(currentUser, this);
+					}
+					//-----------------------------
 					return new LoginResponse(Type.SUCCESS);
 				}
 			return new LoginResponse(Type.WRONG_CREDENTIALS);
@@ -514,6 +555,25 @@ public class Proxy implements IProxyCli, Runnable {
 					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize(), userinfo.isOnline()));
 					fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
 					System.out.println("Credits removed.");
+					//stage4 part------------------
+					synchronized(downloadlist){
+						if(downloadlist.containsKey(fileinfo.getFilename()))downloadlist.put(fileinfo.getFilename(), downloadlist.get(fileinfo.getFilename())+1);
+						else downloadlist.put(fileinfo.getFilename(), 1);
+					}
+					Set<String> clients = clientlist.keySet();
+					for(String s : clients){
+						ClientConnection c = clientlist.get(s);
+						synchronized(c.subscribtions){
+							if(c.subscribtions.containsKey(fileinfo.getFilename())){
+								if(c.subscribtions.get(fileinfo.getFilename())<=downloadlist.get(fileinfo.getFilename())){
+									String notify = "Notification: "+fileinfo.getFilename()+" got downloaded "+c.subscribtions.get(fileinfo.getFilename())+" times!.";
+									c.notifyClient(notify);
+									c.subscribtions.remove(fileinfo.getFilename());
+								}
+							}
+						}
+					}
+					//-----------------------------
 
 					//downloadticketresponse erstellen
 					return new DownloadTicketResponse(new DownloadTicket(
@@ -622,10 +682,29 @@ public class Proxy implements IProxyCli, Runnable {
 				System.out.println("loging out "+currentUser);
 				UserInfo userinfo = userInfoList.get(currentUser);
 				userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), false));
+				//stage4 part------------------
+				synchronized(clientlist){
+					clientlist.remove(currentUser);
+				}
+				//-----------------------------
 				currentUser = null;
 				return new MessageResponse(userinfo.getName()+" successfully logged out.");
 			}
 		}
+		//stage4 part------------------
+		public void subscribe(String filename, int count, ICallback callback){
+			subscribtions.put(filename, count);
+			this.callback=callback;
+		}
+		private void notifyClient(String notify){
+			try {
+				callback.notifyMe(notify);
+			} catch (RemoteException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		//-----------------------------
 	}
 	public static byte[] serialize(Object obj) throws IOException {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -638,5 +717,74 @@ public class Proxy implements IProxyCli, Runnable {
 		ObjectInputStream is = new ObjectInputStream(in);
 		return is.readObject();
 	}
+	//REMOTE-METHODS----------------------------------------------------------------------------------------------
+		public int getReadQuorum(){
+			//return somelist.size();???
+			return qw;
+		}
+
+		public int getWriteQuorum(){
+			//return someotherlist.size();???
+			return qw;
+		}
+
+		public ArrayList<String> getTopThreeDownloads(){
+			//return downloadlist;
+			ArrayList<String> top3list = new ArrayList<String>();
+			Set<String> keyset = downloadlist.keySet();
+			String filename;
+			int count;
+			for(int i=0;i<3;i++){
+				count = 0;
+				filename = null;
+				for(String s : keyset){
+					if(downloadlist.get(s)>count){
+						count=downloadlist.get(s);
+						filename = s;
+					}
+				}
+				if(filename!=null&&!top3list.contains(filename+" "+count))top3list.add(filename+" "+count);
+			}
+			return top3list;
+		}
+
+		public void subscribe(String username, String filename, int count, ICallback callback){
+			//create new Subscribtion with filename,count and save callback
+			clientlist.get(username).subscribe(filename, count, callback);
+		}
+
+		public byte[] getProxyPublicKey(){
+			try {
+				PEMReader in = new PEMReader(new FileReader(proxyConfig.getString("keys.dir")+"/proxy.pub.pem"));
+				byte[] key = serialize((PublicKey) in.readObject());
+				in.close();
+				return key;
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			return null;
+		}
+
+		public void setUserPublicKey(String username, byte[] key){
+			Writer writer = null;
+			File userpublickey = new File(proxyConfig.getString("keys.dir")+"/"+username+".pub.pem");
+			if(userpublickey.exists()){
+				System.out.println("Deleting "+username+".pub.pem"+" because it already exists.");
+				userpublickey.delete();
+			}
+			try {
+				writer = new FileWriter(userpublickey);
+				writer.write(new String(key));
+			} catch (IOException e) {
+				System.out.println("Could not write File: "+username+".pub.pem");
+			} finally {
+				if (writer != null)
+					try {
+						writer.close();
+					} catch (IOException e) {
+					}
+			}
+		}
 
 }
