@@ -31,8 +31,8 @@ public class ProxyRemote extends UnicastRemoteObject implements IRemote {
 	}
 
 	@Override
-	public void subscribe(String username, String filename, int count, Object callback) {
-		//proxy.subscribe(filename, count, callback);
+	public void subscribe(String username, String filename, int count, ICallback callback) {
+		proxy.subscribe(username, filename, count, callback);
 	}
 
 	@Override
