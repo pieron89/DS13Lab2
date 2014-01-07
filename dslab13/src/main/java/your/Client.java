@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -14,11 +15,19 @@ import java.net.ConnectException;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.rmi.AccessException;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
 
 import javax.crypto.spec.SecretKeySpec;
 
+import org.bouncycastle.openssl.PEMReader;
 import org.bouncycastle.util.encoders.Base64;
 
 import util.Config;
@@ -49,6 +58,7 @@ public class Client implements Runnable,IClientCli{
 	//config and shell for client
 	Config clientConfig;
 	Config userConfig;
+	Config mcConfig;
 	Shell clientShell;
 	Thread shellThread;
 	Thread cliproxThread;
@@ -57,7 +67,7 @@ public class Client implements Runnable,IClientCli{
 	//	ObjectInputStream proxyInstream;
 	//	ObjectOutputStream proxyOutstream;
 
-	Channel proxyChannel;
+	TCPChannel proxyChannel;
 	RSAChannel RSA64ProxyChannel;
 	AESChannel AES64ProxyChannel;
 	//client-fileserver socket and streams
@@ -67,12 +77,18 @@ public class Client implements Runnable,IClientCli{
 
 	//current UserPrivateKeyPath
 	String userPrivateKeyPath=null;
+	String username;
+
+	//Registry
+	Registry registry;
+	IRemote proxyremote;
 
 
 	public Client(Config clientConfig, Shell clientShell) {
 		this.clientConfig=clientConfig;
 		this.clientShell=clientShell;
 		userConfig = new Config("user");
+		mcConfig = new Config("mc");
 		this.clientShell.register(this); //register methodes marked with Command
 		shellThread = new Thread(clientShell);
 
@@ -89,6 +105,9 @@ public class Client implements Runnable,IClientCli{
 			//
 			//			System.out.println("Connection to Proxy established.");
 
+
+			registry = LocateRegistry.getRegistry(mcConfig.getString("proxy.host"), mcConfig.getInt("proxy.rmi.port"));
+			proxyremote = (IRemote) registry.lookup("proxyremote");
 			proxyChannel = new TCPChannel(new Socket(clientConfig.getString("proxy.host"), clientConfig.getInt("proxy.tcp.port")));
 			RSA64ProxyChannel = new RSAChannel(new Base64Channel(proxyChannel));
 			AES64ProxyChannel = new AESChannel(new Base64Channel(proxyChannel));
@@ -98,6 +117,9 @@ public class Client implements Runnable,IClientCli{
 			System.out.println("Proxy offline, restart Client.");
 		}catch (IOException e) {
 			//System.out.println("Lost Connection to Proxy");
+		} catch (NotBoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 
@@ -113,6 +135,7 @@ public class Client implements Runnable,IClientCli{
 	public LoginResponse login(String username) throws IOException {
 
 		Object responseob = null;
+		this.username = username;
 
 		SecureRandom random = new SecureRandom();
 		byte[] clientChallenge = new byte[32];
@@ -141,9 +164,9 @@ public class Client implements Runnable,IClientCli{
 					System.out.println(clientChallenge);
 					if(Arrays.equals(Base64.decode(okres.getClientChallenge()),(clientChallenge))){
 						System.out.println("ClientChallenge check passed!");
-//						byte[] proxyChallenge = new byte[32];
-//						proxyChallenge = okres.getProxyChallenge();
-//						proxyChallenge = 
+						//						byte[] proxyChallenge = new byte[32];
+						//						proxyChallenge = okres.getProxyChallenge();
+						//						proxyChallenge = 
 						AES64ProxyChannel.setAESSecretKey(new SecretKeySpec(Base64.decode(okres.getSecretKey()), 0, 
 								Base64.decode(okres.getSecretKey()).length, "AES"));
 						AES64ProxyChannel.setAESiv(Base64.decode(okres.getIv()));
@@ -419,41 +442,136 @@ public class Client implements Runnable,IClientCli{
 	@Override
 	@Command
 	public MessageResponse logout() throws IOException {
-		
+
 		if(userLoggedIn()){
-		MessageResponse logoutresponse = null;
-		try {
-			//			proxyOutstream.writeObject(new LogoutRequest());
-			//			logoutresponse = (MessageResponse) proxyInstream.readObject();
+			MessageResponse logoutresponse = null;
+			try {
+				//			proxyOutstream.writeObject(new LogoutRequest());
+				//			logoutresponse = (MessageResponse) proxyInstream.readObject();
 
-			AES64ProxyChannel.send(serialize(new LogoutRequest()));
-			logoutresponse = (MessageResponse) deserialize(AES64ProxyChannel.receive());
-			userPrivateKeyPath = null;
+				AES64ProxyChannel.send(serialize(new LogoutRequest()));
+				logoutresponse = (MessageResponse) deserialize(AES64ProxyChannel.receive());
+				userPrivateKeyPath = null;
+				username = null;
 
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (NullPointerException e) {
-			System.out.println("Proxy offline, restart Client.");
-			exit();
-		} catch (SocketException e){
-			System.out.println("Proxy offline, restart Client.");
-			exit();
-		}
-		return logoutresponse;
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+			} catch (NullPointerException e) {
+				System.out.println("Proxy offline, restart Client.");
+				exit();
+			} catch (SocketException e){
+				System.out.println("Proxy offline, restart Client.");
+				exit();
+			}
+			return logoutresponse;
 		}else{
 			MessageResponse response = new MessageResponse("Failure");
 			return response;
 		}
 	}
+
+	@Command
+	public void readQuorum(){
+
+		try {
+			System.out.println("Read-Quorum is set to "+proxyremote.readQuorum()+".");
+		} catch (RemoteException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+	@Command
+	public void writeQuorum(){
+
+		try {
+			System.out.println("Write-Quorum is set to "+proxyremote.writeQuorum()+".");
+		} catch (RemoteException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	@Command
+	public void topThreeDownloads(){
+		ArrayList<String> downloadList = new ArrayList<String>();
+		try {
+			downloadList = proxyremote.topThreeDownloads();
+			int counter = 1;
+			System.out.println("Top Three Downloads:");
+			for(String s: downloadList){
+				System.out.println(counter+". "+s);
+				counter++;
+			}
+		} catch (RemoteException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}
+	
+	@Command
+	public void subscribe(String filename, int numberOfDownloads){
+
+		try {
+			proxyremote.subscribe(username, filename, numberOfDownloads, new Callback());
+		} catch (RemoteException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	@Command
+	public void getProxyPublicKey(){
+
+		byte[] key = null;
+		Writer writer = null;
+		File proxypublickey = new File(clientConfig.getString("keys.dir")+"/proxy.pub.pem");
+
+		if(proxypublickey.exists()){
+			System.out.println("Deleting proxy.pub.pem because it already exists.");
+			proxypublickey.delete();
+		}
+		try {
+			key = proxyremote.getProxyPublicKey();
+			writer = new FileWriter(proxypublickey);
+			writer.write(new String(key));
+		} catch (IOException e) {
+			System.out.println("Could not write File: proxy.pub.pem");
+		} finally {
+			if (writer != null)
+				try {
+					writer.close();
+				} catch (IOException e) {
+				}
+		}
+
+	}
+	
+	@Command
+	public void setUserPublicKey(String username){
+		PEMReader in;
+		try {
+			in = new PEMReader(new FileReader(clientConfig.getString("keys.dir")+"/"+username+".pub.pem"));
+			PublicKey publicKey = (PublicKey) in.readObject();
+			proxyremote.setUserPublicKey(username, serialize(publicKey));
+		} catch (FileNotFoundException e) {
+			System.out.println("Could not find file: "+username+".pub.pem");
+			//e.printStackTrace();
+		} catch (IOException e) {
+			System.out.println("Could not access file: "+username+".pub.pem");
+			//e.printStackTrace();
+		} 
+
+	}
+
 	/**
 	 * @see client.IClientCli#exit()
 	 */
 	@Override
 	@Command
 	public MessageResponse exit() throws IOException {
-
-		//RSA64ProxyChannel.
-		//proxySocket.close();
+		proxyChannel.close();
 		System.in.close();
 		return new MessageResponse("Client exited successfully.");
 	}
