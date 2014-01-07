@@ -15,6 +15,6 @@ public interface IRemote extends Remote{
 	
 	public byte[] getProxyPublicKey();
 	
-	public void setUserPublicKey(String username, byte[] key);
+	public void setUserPublicKey(String username,String filename, byte[] key);
 
 }

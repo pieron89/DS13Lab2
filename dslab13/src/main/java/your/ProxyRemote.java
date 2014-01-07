@@ -14,14 +14,14 @@ public class ProxyRemote extends UnicastRemoteObject implements IRemote {
 	
 	@Override
 	public int readQuorum() {
-		//return proxy.getReadQuorum();
-		return 0;
+		return proxy.getReadQuorum();
+		//return 0;
 	}
 
 	@Override
 	public int writeQuorum() {
-		//return proxy.getWriteQuorum();
-		return 0;
+		return proxy.getWriteQuorum();
+		//return 0;
 	}
 
 	@Override
@@ -37,13 +37,13 @@ public class ProxyRemote extends UnicastRemoteObject implements IRemote {
 
 	@Override
 	public byte[] getProxyPublicKey() {
-		//return proxy.getProxyPublicKey();
-		return null;
+		return proxy.getProxyPublicKey();
+		//return null;
 	}
 
 	@Override
-	public void setUserPublicKey(String username, byte[] key) {
-		//proxy.setUserPublicKey(username, key);
+	public void setUserPublicKey(String username, String filename, byte[] key) {
+		proxy.setUserPublicKey(username, key);
 	}
 
 }

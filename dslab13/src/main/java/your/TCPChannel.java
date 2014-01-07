@@ -32,4 +32,11 @@ public class TCPChannel implements Channel {
 
 	}
 
+	public void close() throws IOException {
+		// TODO Auto-generated method stub
+		mySocket.close();
+		outstream.close();
+		instream.close();
+	}
+
 }
