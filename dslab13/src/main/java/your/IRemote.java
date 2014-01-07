@@ -11,10 +11,10 @@ public interface IRemote extends Remote{
 	
 	public ArrayList<String> topThreeDownloads();
 	
-	public void subscribe(String filename, int count, Object callback);
+	public void subscribe(String username, String filename, int count, Object callback);
 	
 	public byte[] getProxyPublicKey();
 	
-	public void setUserPublicKey(String username,String filename, byte[] key);
+	public void setUserPublicKey(String username, byte[] key);
 
 }
