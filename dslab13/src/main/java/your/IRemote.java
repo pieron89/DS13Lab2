@@ -10,7 +10,7 @@ public interface IRemote extends Remote{
 	
 	public int writeQuorum() throws RemoteException;
 	
-	public ArrayList<String> topThreeDownloads() throws RemoteException;
+	public String topThreeDownloads() throws RemoteException;
 	
 	public void subscribe(String username, String filename, int count, ICallback callback) throws RemoteException;
 	

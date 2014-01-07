@@ -728,12 +728,14 @@ public class Proxy implements IProxyCli, Runnable {
 			return qw;
 		}
 
-		public ArrayList<String> getTopThreeDownloads(){
+		public String getTopThreeDownloads(){
 			//return downloadlist;
 			ArrayList<String> top3list = new ArrayList<String>();
 			Set<String> keyset = downloadlist.keySet();
 			String filename;
+			String returnstring = "Top Three Downloads:";
 			int count;
+			int stringcounter = 1;
 			for(int i=0;i<3;i++){
 				count = 0;
 				filename = null;
@@ -743,9 +745,19 @@ public class Proxy implements IProxyCli, Runnable {
 						filename = s;
 					}
 				}
-				if(filename!=null&&!top3list.contains(filename+" "+count))top3list.add(filename+" "+count);
+				keyset.remove(filename);
+				if(filename!=null&&!top3list.contains(filename+" "+count)){
+					top3list.add(filename+" "+count);
+					//returnstring += stringcounter+". "+filename+" "+count;
+				}
 			}
-			return top3list;
+			for(String s: top3list){
+				System.out.println(top3list.size());
+				returnstring += "\n"+stringcounter+". "+s;
+				stringcounter++;
+			}
+			
+			return returnstring;
 		}
 
 		public void subscribe(String username, String filename, int count, ICallback callback){

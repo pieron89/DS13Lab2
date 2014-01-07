@@ -14,36 +14,32 @@ public class ProxyRemote extends UnicastRemoteObject implements IRemote {
 	
 	@Override
 	public int readQuorum() {
-		//return proxy.getReadQuorum();
-		return 0;
+		return proxy.getReadQuorum();
 	}
 
 	@Override
 	public int writeQuorum() {
-		//return proxy.getWriteQuorum();
-		return 0;
+		return proxy.getWriteQuorum();
 	}
 
 	@Override
-	public ArrayList<String> topThreeDownloads() {
-		//return proxy.getTopThreeDownloads();
-		return null;
+	public String topThreeDownloads() {
+		return proxy.getTopThreeDownloads();
 	}
 
 	@Override
 	public void subscribe(String username, String filename, int count, ICallback callback) {
-		//proxy.subscribe(username, filename, count, callback);
+		proxy.subscribe(username, filename, count, callback);
 	}
 
 	@Override
 	public byte[] getProxyPublicKey() {
-		//return proxy.getProxyPublicKey();
-		return null;
+		return proxy.getProxyPublicKey();
 	}
 
 	@Override
 	public void setUserPublicKey(String username, byte[] key) {
-		//proxy.setUserPublicKey(username, key);
+		proxy.setUserPublicKey(username, key);
 	}
 
 }

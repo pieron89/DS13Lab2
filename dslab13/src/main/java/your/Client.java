@@ -494,15 +494,9 @@ public class Client implements Runnable,IClientCli{
 	
 	@Command
 	public void topThreeDownloads(){
-		ArrayList<String> downloadList = new ArrayList<String>();
+		
 		try {
-			downloadList = proxyremote.topThreeDownloads();
-			int counter = 1;
-			System.out.println("Top Three Downloads:");
-			for(String s: downloadList){
-				System.out.println(counter+". "+s);
-				counter++;
-			}
+			System.out.println(proxyremote.topThreeDownloads());
 		} catch (RemoteException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
