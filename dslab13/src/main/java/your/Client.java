@@ -24,6 +24,7 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Scanner;
 
 import javax.crypto.spec.SecretKeySpec;
 
@@ -491,10 +492,10 @@ public class Client implements Runnable,IClientCli{
 			e.printStackTrace();
 		}
 	}
-	
+
 	@Command
 	public void topThreeDownloads(){
-		
+
 		try {
 			System.out.println(proxyremote.topThreeDownloads());
 		} catch (RemoteException e) {
@@ -503,7 +504,7 @@ public class Client implements Runnable,IClientCli{
 		}
 
 	}
-	
+
 	@Command
 	public void subscribe(String filename, int numberOfDownloads){
 
@@ -514,11 +515,10 @@ public class Client implements Runnable,IClientCli{
 			e.printStackTrace();
 		}
 	}
-	
+
 	@Command
 	public void getProxyPublicKey(){
-
-		byte[] key = null;
+		String key = null;
 		Writer writer = null;
 		File proxypublickey = new File(clientConfig.getString("keys.dir")+"/proxy.pub.pem");
 
@@ -541,14 +541,25 @@ public class Client implements Runnable,IClientCli{
 		}
 
 	}
-	
+
 	@Command
 	public void setUserPublicKey(String username){
-		PEMReader in;
+		BufferedReader in;
+		FileReader fr;
 		try {
-			in = new PEMReader(new FileReader(clientConfig.getString("keys.dir")+"/"+username+".pub.pem"));
-			PublicKey publicKey = (PublicKey) in.readObject();
-			proxyremote.setUserPublicKey(username, serialize(publicKey));
+			fr = new FileReader(clientConfig.getString("keys.dir")+"/"+username+".pub.pem");
+			in = new BufferedReader(fr);
+			String line = null;
+			StringBuilder stringbuilder = new StringBuilder();
+			String lineseperator = System.getProperty("line.separator");
+			while((line = in.readLine()) != null) {
+				stringbuilder.append(line);
+				stringbuilder.append(lineseperator);
+			}
+			in.close();
+			fr.close();
+			String publicKey = (String) stringbuilder.toString();
+			proxyremote.setUserPublicKey(username, publicKey);
 		} catch (FileNotFoundException e) {
 			System.out.println("Could not find file: "+username+".pub.pem");
 			//e.printStackTrace();
@@ -556,7 +567,6 @@ public class Client implements Runnable,IClientCli{
 			System.out.println("Could not access file: "+username+".pub.pem");
 			//e.printStackTrace();
 		} 
-
 	}
 
 	/**

@@ -2,6 +2,7 @@ package your;
 
 import java.util.ArrayList;
 import java.rmi.server.UnicastRemoteObject;
+import java.security.PublicKey;
 
 public class ProxyRemote extends UnicastRemoteObject implements IRemote {
 	
@@ -33,12 +34,12 @@ public class ProxyRemote extends UnicastRemoteObject implements IRemote {
 	}
 
 	@Override
-	public byte[] getProxyPublicKey() {
+	public String getProxyPublicKey() {
 		return proxy.getProxyPublicKey();
 	}
 
 	@Override
-	public void setUserPublicKey(String username, byte[] key) {
+	public void setUserPublicKey(String username, String key) {
 		proxy.setUserPublicKey(username, key);
 	}
 

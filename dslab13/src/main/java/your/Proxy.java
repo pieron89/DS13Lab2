@@ -1,5 +1,6 @@
 package your;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -907,20 +908,36 @@ public class Proxy implements IProxyCli, Runnable {
 			clientlist.get(username).subscribe(filename, count, callback);
 		}
 
-		public byte[] getProxyPublicKey(){
+		public String getProxyPublicKey(){
+			BufferedReader in;
+			FileReader fr;
+			String publicKey = null;
 			try {
-				PEMReader in = new PEMReader(new FileReader(proxyConfig.getString("keys.dir")+"/proxy.pub.pem"));
-				byte[] key = serialize((PublicKey) in.readObject());
+				fr = new FileReader(proxyConfig.getString("keys.dir")+"/proxy.pub.pem");
+				in = new BufferedReader(fr);
+				String line = null;
+				StringBuilder stringbuilder = new StringBuilder();
+				String lineseperator = System.getProperty("line.separator");
+				while((line = in.readLine()) != null) {
+					stringbuilder.append(line);
+					stringbuilder.append(lineseperator);
+				}
 				in.close();
-				return key;
+				fr.close();
+				publicKey = (String) stringbuilder.toString();
+				System.out.println(publicKey);
+			} catch (FileNotFoundException e) {
+				System.out.println("Could not find file: proxy.pub.pem");
+				//e.printStackTrace();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			return null;
+				System.out.println("gugugugCould not access file: proxy.pub.pem");
+				//e.printStackTrace();
+			} 
+
+			return publicKey;
 		}
 
-		public void setUserPublicKey(String username, byte[] key){
+		public void setUserPublicKey(String username, String key){
 			Writer writer = null;
 			File userpublickey = new File(proxyConfig.getString("keys.dir")+"/"+username+".pub.pem");
 			if(userpublickey.exists()){

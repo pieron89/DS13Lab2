@@ -2,6 +2,7 @@ package your;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import java.security.PublicKey;
 import java.util.ArrayList;
 
 public interface IRemote extends Remote{
@@ -14,8 +15,8 @@ public interface IRemote extends Remote{
 	
 	public void subscribe(String username, String filename, int count, ICallback callback) throws RemoteException;
 	
-	public byte[] getProxyPublicKey() throws RemoteException;
+	public String getProxyPublicKey() throws RemoteException;
 	
-	public void setUserPublicKey(String username, byte[] key) throws RemoteException;
+	public void setUserPublicKey(String username, String key) throws RemoteException;
 
 }
