@@ -225,11 +225,6 @@ public class Proxy implements IProxyCli, Runnable {
 		return MessageDigest.isEqual(computedHash,receivedHash);
 	}
 	
-	private Response getResponseAndCheck(){
-		
-		return null;
-	}
-
 
 	private Object requestToFileserver(FileServerInfo fsi, HashPlusObjectRequest request){
 		//kurze tcp verbindung zum fileserver aufbauen um request zu verschicken und response zu erhalten

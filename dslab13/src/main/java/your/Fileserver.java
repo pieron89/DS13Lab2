@@ -2,6 +2,8 @@ package your;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -15,8 +17,18 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.security.InvalidKeyException;
+import java.security.Key;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.HashSet;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.bouncycastle.util.encoders.Base64;
+import org.bouncycastle.util.encoders.Hex;
 
 import message.Response;
 import message.request.DownloadFileRequest;
@@ -46,6 +58,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 	ServerSocket serverSocket;
 	HashMap<String, Integer> fileList;
 	AliveSender packetSender;
+	Key secretSharedKey;
 
 	public Fileserver(Config filesConfig, Shell filesShell){
 		this.filesConfig = filesConfig;
@@ -62,6 +75,24 @@ public class Fileserver implements Runnable,IFileServerCli{
 		isAliveSending.start();
 		fileList = new HashMap<String, Integer>();
 
+		byte[] keyBytes = new byte[1024];
+		FileInputStream fis;
+		try {
+			fis = new FileInputStream(filesConfig.getString("hmac.key"));
+			fis.read(keyBytes);
+			fis.close();
+			byte[] input = Hex.decode(keyBytes);
+			// make sure to use the right ALGORITHM for what you want to do 
+			// (see text) 
+			secretSharedKey = new SecretKeySpec(input,"HmacSHA256");
+		} catch (FileNotFoundException e2) {
+			// TODO Auto-generated catch block
+			e2.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
 		try {
 			serverSocket = new ServerSocket(filesConfig.getInt("tcp.port"));
 			while(true){
@@ -77,6 +108,32 @@ public class Fileserver implements Runnable,IFileServerCli{
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	private byte[] computeHash(String tostring){
+		// make sure to use the right ALGORITHM for what you want to do 
+		// (see text) 
+		Mac hMac;
+		byte[] hash = null;
+		try {
+			hMac = Mac.getInstance("HmacSHA256");
+			hMac.init(secretSharedKey);
+			// MESSAGE is the message to sign in bytes 
+			hMac.update(tostring.getBytes());
+			hash = Base64.encode(hMac.doFinal());
+		} catch (NoSuchAlgorithmException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidKeyException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} 
+
+		return hash;
+	}
+
+	private boolean validateHash(byte[] computedHash, byte[] receivedHash){
+		return MessageDigest.isEqual(computedHash,receivedHash);
 	}
 
 	public class clientDownloader implements Runnable,IFileServer{
@@ -141,13 +198,13 @@ public class Fileserver implements Runnable,IFileServerCli{
 		@Override
 		public Response list() throws IOException {
 			System.out.println("Received ListRequest from Proxy.");
-			
+
 			synchronized(fileList){
-			File[] filearray = new File(filesConfig.getString("fileserver.dir")).listFiles();
-			for(File listfile : filearray){
-				fileList.put(listfile.getName(), 0);
-			}
-			return new ListResponse(fileList.keySet());
+				File[] filearray = new File(filesConfig.getString("fileserver.dir")).listFiles();
+				for(File listfile : filearray){
+					fileList.put(listfile.getName(), 0);
+				}
+				return new ListResponse(fileList.keySet());
 			}
 		}
 		/**
@@ -192,7 +249,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 				return new VersionResponse(request.getFilename(), fileList.get(request.getFilename()));	
 			}
 			return new MessageResponse("File does not exist on the server.");
-			
+
 		}
 		/**
 		 * @see server.IFileServer#upload(message.request.UploadRequest)
@@ -203,16 +260,16 @@ public class Fileserver implements Runnable,IFileServerCli{
 			System.out.println("Uploading the following File: "+request.getFilename());
 
 			if(fileList.containsKey(request.getFilename())){
-					int version;
-					String name;
-					name = request.getFilename();
-					version = fileList.get(name) + 1;
-					fileList.remove(name);
-					fileList.put(name, version);					
+				int version;
+				String name;
+				name = request.getFilename();
+				version = fileList.get(name) + 1;
+				fileList.remove(name);
+				fileList.put(name, version);					
 			} else {
 				fileList.put(request.getFilename(), request.getVersion());
 			}
-			
+
 			Writer writer = null;
 			File uploadfile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getFilename());
 			if(uploadfile.exists()){
@@ -235,7 +292,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 		}
 
 	}
-	
+
 	public class AliveSender implements Runnable{
 		//sendet isAlive packets an proxy
 		@Override
