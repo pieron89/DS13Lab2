@@ -1,8 +1,14 @@
 package your;
 
+import java.io.Serializable;
+
 import message.Request;
 
-public class HashPlusObjectRequest {
+public class HashPlusObjectRequest implements Serializable{
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 7708844363361222978L;
 	private final Request request;
 	private final byte[] hash;
 	

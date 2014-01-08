@@ -1,8 +1,14 @@
 package your;
 
+import java.io.Serializable;
+
 import message.Response;
 
-public class HashPlusObjectResponse {
+public class HashPlusObjectResponse implements Serializable{
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 4312613797942122759L;
 	private final Response response;
 	private final byte[] hash;
 	

@@ -230,6 +230,7 @@ public class Proxy implements IProxyCli, Runnable {
 		//kurze tcp verbindung zum fileserver aufbauen um request zu verschicken und response zu erhalten
 		Socket proxyclientSocket;
 		Object response = null;
+		System.out.println(fsi.toString());
 		try {
 			proxyclientSocket = new Socket(fsi.getAddress(), fsi.getPort());
 			ObjectOutputStream outstreamPCS = new ObjectOutputStream(proxyclientSocket.getOutputStream());
@@ -567,9 +568,11 @@ public class Proxy implements IProxyCli, Runnable {
 					byte[] temphash = computeHash(request.toString());
 					HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, request);
 					HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(s),sendrequest);
-					if(validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
+					if(validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))
+							||sendresponse.getResponse() instanceof MessageResponse){
 						return sendresponse.getResponse();
 					}else{
+						System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
 						list();
 					}
 					
@@ -607,6 +610,7 @@ public class Proxy implements IProxyCli, Runnable {
 							si = fileServerInfoList.get(s);
 							fileservername = s;
 							minUsage = si.getUsage();
+							System.out.println("Das hier sollte zumindest einmal erscheinen");
 						}
 					}
 					//credits abziehen
@@ -616,13 +620,16 @@ public class Proxy implements IProxyCli, Runnable {
 					InfoRequest irequest = new InfoRequest(request.getFilename());
 					byte[] temphash = computeHash(irequest.toString());
 					HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, irequest);
-					HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(si),sendrequest);
-					if(validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
+					System.out.println(si+"sdkfnldkfnsldkfnsdlkfsdlkfnsdlkfnlsdkfnlskdnf");
+					HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(si,sendrequest);
+					if(validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))
+							||sendresponse.getResponse() instanceof MessageResponse){
 						fileinfo = (InfoResponse) sendresponse.getResponse();
 						if(userinfo.getCredits()<fileinfo.getSize()){
 							return new MessageResponse("Not enough credits.");
 						}
 					}else{
+						System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
 						download(request);
 					}
 //					fileinfo = (InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()));
@@ -675,8 +682,12 @@ public class Proxy implements IProxyCli, Runnable {
 					VersionRequest vrequest = new VersionRequest(request.getFilename());
 					byte[] versiontemphash = computeHash(vrequest.toString());
 					HashPlusObjectRequest versionsendrequest = new HashPlusObjectRequest(versiontemphash, vrequest);
-					HashPlusObjectResponse versionsendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(si),versionsendrequest);
+					HashPlusObjectResponse versionsendresponse = (HashPlusObjectResponse) requestToFileserver(si,versionsendrequest);
 					if(validateHash(versionsendresponse.getHash(), computeHash(versionsendresponse.getResponse().toString()))){
+						if(versionsendresponse.getResponse() instanceof MessageResponse){
+							System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
+							download(request);
+						}
 						return new DownloadTicketResponse(new DownloadTicket(
 								currentUser,
 								request.getFilename(),
@@ -752,8 +763,10 @@ public class Proxy implements IProxyCli, Runnable {
 				VersionRequest vrequest = new VersionRequest(request.getFilename());
 				byte[] temphash = computeHash(vrequest.toString());
 				HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, vrequest);
-				HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(fs),sendrequest);
-				if(!validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
+				HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fs,sendrequest);
+				if(!validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))
+						||sendresponse.getResponse() instanceof MessageResponse){
+					System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
 					upload(request);
 				}
 				//Response response = (Response) requestToFileserver(fs, new VersionRequest(request.getFilename()));
@@ -776,10 +789,13 @@ public class Proxy implements IProxyCli, Runnable {
 				
 				byte[] temphash = computeHash(versionfixrequest.toString());
 				HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, versionfixrequest);
-				HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(fs),sendrequest);
-				if(!validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
+				HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fs,sendrequest);
+				MessageResponse mesrp = new MessageResponse("Fehler beim verifizieren des Hashes");
+				if(validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))
+						&&!(sendresponse.getResponse().equals(mesrp))){
 					messageresponse = (MessageResponse) sendresponse.getResponse();
 				}else{
+					System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
 					upload(request);
 				}
 				

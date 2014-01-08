@@ -158,6 +158,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 			while(true){
 				try {
 					request = inputs.readObject();
+
 					if(request.getClass()==DownloadFileRequest.class){
 						DownloadFileRequest dfr = (DownloadFileRequest) request;
 						if(ChecksumUtils.verifyChecksum(dfr.getTicket().getUsername(), new File(filesConfig.getString("fileserver.dir")+"/"+dfr.getTicket().getFilename()), 1, dfr.getTicket().getChecksum())){
@@ -167,175 +168,204 @@ public class Fileserver implements Runnable,IFileServerCli{
 						}
 						clientSocket.close();
 						break;
-					}else if(request.getClass()==InfoRequest.class){
-						outputs.writeObject(info((InfoRequest) request));
+					}else if(request.getClass()==HashPlusObjectRequest.class){
+						HashPlusObjectRequest hrequest = (HashPlusObjectRequest) request;
+						if(hrequest.getRequest().getClass()==InfoRequest.class){
+							InfoRequest info = (InfoRequest) hrequest.getRequest();
+							HashPlusObjectResponse sendresponse;
+							InfoResponse inforp = (InfoResponse) info(info);
+							byte[] temphash = computeHash(inforp.toString());
+							sendresponse = new HashPlusObjectResponse(temphash, inforp);
+							outputs.writeObject(sendresponse);
+							clientSocket.close();
+							break;
+						}else if(hrequest.getRequest().getClass()==VersionRequest.class){
+							VersionRequest version = (VersionRequest) hrequest.getRequest();
+							HashPlusObjectResponse sendresponse;
+							VersionResponse versionrp = (VersionResponse) version(version);
+							byte[] temphash = computeHash(versionrp.toString());
+							sendresponse = new HashPlusObjectResponse(temphash, versionrp);
+							outputs.writeObject(sendresponse);
+							clientSocket.close();
+							break;
+						}else if(hrequest.getRequest().getClass()==UploadRequest.class){
+							UploadRequest upload = (UploadRequest) hrequest.getRequest();
+							HashPlusObjectResponse sendresponse;
+							MessageResponse uploadrp = (MessageResponse) upload(upload);
+							byte[] temphash = computeHash(uploadrp.toString());
+							sendresponse = new HashPlusObjectResponse(temphash, uploadrp);
+							outputs.writeObject(sendresponse);
+							clientSocket.close();
+							break;
+						}else if(hrequest.getRequest().getClass()==ListRequest.class){
+							HashPlusObjectResponse sendresponse;
+							ListResponse listrp = (ListResponse) list();
+							byte[] temphash = computeHash(listrp.toString());
+							sendresponse = new HashPlusObjectResponse(temphash, listrp);
+							outputs.writeObject(sendresponse);
+							clientSocket.close();
+							break;
+						}
+					}else{
+						HashPlusObjectResponse sendresponse;
+						MessageResponse mesrp = new MessageResponse("Fehler beim verifizieren des Hashes");
+						byte[] temphash = computeHash(mesrp.toString());
+						sendresponse = new HashPlusObjectResponse(temphash, mesrp);
+						outputs.writeObject(sendresponse);
 						clientSocket.close();
-						break;
-					}else if(request.getClass()==VersionRequest.class){
-						outputs.writeObject(version((VersionRequest) request));
-						clientSocket.close();
-						break;
-					}else if(request.getClass()==UploadRequest.class){
-						outputs.writeObject(upload((UploadRequest) request));
-						clientSocket.close();
-						break;
-					}else if(request.getClass()==ListRequest.class){
-						outputs.writeObject(list());
-						clientSocket.close();
-						break;
 					}
-				} catch (ClassNotFoundException e) {
-					e.printStackTrace();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			}
-
-		}
-		/**
-		 * @see server.IFileServer#list()
-		 */
-		@Override
-		public Response list() throws IOException {
-			System.out.println("Received ListRequest from Proxy.");
-
-			synchronized(fileList){
-				File[] filearray = new File(filesConfig.getString("fileserver.dir")).listFiles();
-				for(File listfile : filearray){
-					fileList.put(listfile.getName(), 0);
-				}
-				return new ListResponse(fileList.keySet());
-			}
-		}
-		/**
-		 * @see server.IFileServer#download(message.request.DownloadFileRequest)
-		 */
-		@Override
-		public Response download(DownloadFileRequest request) throws IOException {
-			System.out.println("Received DownloadFileRequest from Client: "+request.getTicket().getUsername());
-			BufferedReader bufferedreader = null;
-			File downloadfile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getTicket().getFilename());
-			bufferedreader = new BufferedReader(new FileReader(downloadfile));
-			String line = null;
-			StringBuilder stringBuilder = new StringBuilder();
-			String lineseperator = System.getProperty("line.separator");
-
-			while((line = bufferedreader.readLine()) != null) {
-				stringBuilder.append(line);
-				stringBuilder.append(lineseperator);
-			}
-			bufferedreader.close();
-			return new DownloadFileResponse(request.getTicket(), (stringBuilder.toString()).getBytes());
-		}
-		/**
-		 * @see server.IFileServer#info(message.request.InfoRequest)
-		 */
-		@Override
-		public Response info(InfoRequest request) throws IOException {
-			System.out.println("Received InfoRequest from Proxy.");
-			File infofile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getFilename());
-			return new InfoResponse(request.getFilename(),infofile.length());
-		}
-		/**
-		 * @see server.IFileServer#version(message.request.VersionRequest)
-		 */
-		@Override
-		public Response version(VersionRequest request) throws IOException {
-			System.out.println("Received VersionRequest from Proxy.");
-			if(fileList.isEmpty()){
-				list();
-			}
-			if(fileList.containsKey(request.getFilename())){
-				return new VersionResponse(request.getFilename(), fileList.get(request.getFilename()));	
-			}
-			return new MessageResponse("File does not exist on the server.");
-
-		}
-		/**
-		 * @see server.IFileServer#upload(message.request.UploadRequest)
-		 */
-		@Override
-		public MessageResponse upload(UploadRequest request) throws IOException {
-			System.out.println("Received UploadRequest from Proxy.");
-			System.out.println("Uploading the following File: "+request.getFilename());
-
-			if(fileList.containsKey(request.getFilename())){
-				int version;
-				String name;
-				name = request.getFilename();
-				version = fileList.get(name) + 1;
-				fileList.remove(name);
-				fileList.put(name, version);					
-			} else {
-				fileList.put(request.getFilename(), request.getVersion());
-			}
-
-			Writer writer = null;
-			File uploadfile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getFilename());
-			if(uploadfile.exists()){
-				System.out.println("Deleting "+request.getFilename()+" because it already exists.");
-				uploadfile.delete();
-			}
-			try {
-				writer = new FileWriter(uploadfile);
-				writer.write(new String(request.getContent()));
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
 			} catch (IOException e) {
-				System.out.println("Could not write file.");
-			} finally {
-				if (writer != null)
-					try {
-						writer.close();
-					} catch (IOException e) {
-					}
+				e.printStackTrace();
 			}
-			return new MessageResponse("File successfully uploaded.");
 		}
 
 	}
+	/**
+	 * @see server.IFileServer#list()
+	 */
+	@Override
+	public Response list() throws IOException {
+		System.out.println("Received ListRequest from Proxy.");
 
-	public class AliveSender implements Runnable{
-		//sendet isAlive packets an proxy
-		@Override
-		public void run() {
-			try {
-				datagramSocket = new DatagramSocket();
-			} catch (SocketException e1) {
-				e1.printStackTrace();
+		synchronized(fileList){
+			File[] filearray = new File(filesConfig.getString("fileserver.dir")).listFiles();
+			for(File listfile : filearray){
+				fileList.put(listfile.getName(), 0);
 			}
-			while(!datagramSocket.isClosed()){
-				try {
-					Thread.currentThread();
-					Thread.sleep(filesConfig.getInt("fileserver.alive"));
-					InetAddress address = InetAddress.getByName(filesConfig.getString("proxy.host"));
-					byte[] buf = new byte[256];
-					//buf = filesConfig.getString("tcp.port").getBytes();
-					buf = new String("!alive "+filesConfig.getString("tcp.port")).getBytes();
-					DatagramPacket packet = new DatagramPacket(buf, buf.length, address, filesConfig.getInt("proxy.udp.port"));
-					datagramSocket.send(packet);
-				} catch (SocketException e) {
-					//e.printStackTrace();
-				} catch (UnknownHostException e) {
-					e.printStackTrace();
-				} catch (IOException e) {
-					e.printStackTrace();
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
+			return new ListResponse(fileList.keySet());
 		}
 	}
 	/**
-	 * @see server.IFileServerCli#exit()
+	 * @see server.IFileServer#download(message.request.DownloadFileRequest)
 	 */
 	@Override
-	@Command
-	public MessageResponse exit() throws IOException {
+	public Response download(DownloadFileRequest request) throws IOException {
+		System.out.println("Received DownloadFileRequest from Client: "+request.getTicket().getUsername());
+		BufferedReader bufferedreader = null;
+		File downloadfile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getTicket().getFilename());
+		bufferedreader = new BufferedReader(new FileReader(downloadfile));
+		String line = null;
+		StringBuilder stringBuilder = new StringBuilder();
+		String lineseperator = System.getProperty("line.separator");
 
-		datagramSocket.close();
-		System.in.close();
-		serverSocket.close();
-
-		return new MessageResponse("Exit successful");
+		while((line = bufferedreader.readLine()) != null) {
+			stringBuilder.append(line);
+			stringBuilder.append(lineseperator);
+		}
+		bufferedreader.close();
+		return new DownloadFileResponse(request.getTicket(), (stringBuilder.toString()).getBytes());
 	}
+	/**
+	 * @see server.IFileServer#info(message.request.InfoRequest)
+	 */
+	@Override
+	public Response info(InfoRequest request) throws IOException {
+		System.out.println("Received InfoRequest from Proxy.");
+		File infofile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getFilename());
+		return new InfoResponse(request.getFilename(),infofile.length());
+	}
+	/**
+	 * @see server.IFileServer#version(message.request.VersionRequest)
+	 */
+	@Override
+	public Response version(VersionRequest request) throws IOException {
+		System.out.println("Received VersionRequest from Proxy.");
+		if(fileList.isEmpty()){
+			list();
+		}
+		if(fileList.containsKey(request.getFilename())){
+			return new VersionResponse(request.getFilename(), fileList.get(request.getFilename()));	
+		}
+		return new MessageResponse("File does not exist on the server.");
+
+	}
+	/**
+	 * @see server.IFileServer#upload(message.request.UploadRequest)
+	 */
+	@Override
+	public MessageResponse upload(UploadRequest request) throws IOException {
+		System.out.println("Received UploadRequest from Proxy.");
+		System.out.println("Uploading the following File: "+request.getFilename());
+
+		if(fileList.containsKey(request.getFilename())){
+			int version;
+			String name;
+			name = request.getFilename();
+			version = fileList.get(name) + 1;
+			fileList.remove(name);
+			fileList.put(name, version);					
+		} else {
+			fileList.put(request.getFilename(), request.getVersion());
+		}
+
+		Writer writer = null;
+		File uploadfile = new File(filesConfig.getString("fileserver.dir")+"/"+request.getFilename());
+		if(uploadfile.exists()){
+			System.out.println("Deleting "+request.getFilename()+" because it already exists.");
+			uploadfile.delete();
+		}
+		try {
+			writer = new FileWriter(uploadfile);
+			writer.write(new String(request.getContent()));
+		} catch (IOException e) {
+			System.out.println("Could not write file.");
+		} finally {
+			if (writer != null)
+				try {
+					writer.close();
+				} catch (IOException e) {
+				}
+		}
+		return new MessageResponse("File successfully uploaded.");
+	}
+
+}
+
+public class AliveSender implements Runnable{
+	//sendet isAlive packets an proxy
+	@Override
+	public void run() {
+		try {
+			datagramSocket = new DatagramSocket();
+		} catch (SocketException e1) {
+			e1.printStackTrace();
+		}
+		while(!datagramSocket.isClosed()){
+			try {
+				Thread.currentThread();
+				Thread.sleep(filesConfig.getInt("fileserver.alive"));
+				InetAddress address = InetAddress.getByName(filesConfig.getString("proxy.host"));
+				byte[] buf = new byte[256];
+				//buf = filesConfig.getString("tcp.port").getBytes();
+				buf = new String("!alive "+filesConfig.getString("tcp.port")).getBytes();
+				DatagramPacket packet = new DatagramPacket(buf, buf.length, address, filesConfig.getInt("proxy.udp.port"));
+				datagramSocket.send(packet);
+			} catch (SocketException e) {
+				//e.printStackTrace();
+			} catch (UnknownHostException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+}
+/**
+ * @see server.IFileServerCli#exit()
+ */
+@Override
+@Command
+public MessageResponse exit() throws IOException {
+
+	datagramSocket.close();
+	System.in.close();
+	serverSocket.close();
+
+	return new MessageResponse("Exit successful");
+}
 }
 
