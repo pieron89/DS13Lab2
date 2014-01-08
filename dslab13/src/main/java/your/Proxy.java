@@ -25,6 +25,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.security.InvalidKeyException;
 import java.security.Key;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.SecureRandom;
@@ -219,9 +220,18 @@ public class Proxy implements IProxyCli, Runnable {
 		
 		return hash;
 	}
+	
+	private boolean validateHash(byte[] computedHash, byte[] receivedHash){
+		return MessageDigest.isEqual(computedHash,receivedHash);
+	}
+	
+	private Response getResponseAndCheck(){
+		
+		return null;
+	}
 
 
-	private Object requestToFileserver(FileServerInfo fsi, Request request){
+	private Object requestToFileserver(FileServerInfo fsi, HashPlusObjectRequest request){
 		//kurze tcp verbindung zum fileserver aufbauen um request zu verschicken und response zu erhalten
 		Socket proxyclientSocket;
 		Object response = null;
@@ -557,7 +567,18 @@ public class Proxy implements IProxyCli, Runnable {
 			System.out.println("Listrequest received from "+currentUser);
 			for(String s : fileServerInfoList.keySet()){
 				if(fileServerInfoList.get(s).isOnline()){
-					return (Response) requestToFileserver(fileServerInfoList.get(s),new ListRequest());
+					//ListResponse response = (ListResponse) requestToFileserver(fileServerInfoList.get(s),request);
+					ListRequest request = new ListRequest();
+					byte[] temphash = computeHash(request.toString());
+					HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, request);
+					HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(s),sendrequest);
+					if(validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
+						return sendresponse.getResponse();
+					}else{
+						list();
+					}
+					
+					//return (Response) requestToFileserver(fileServerInfoList.get(s),new ListRequest());
 				}
 			}
 			return new MessageResponse("No Fileservers online.");
@@ -597,14 +618,42 @@ public class Proxy implements IProxyCli, Runnable {
 					UserInfo userinfo = userInfoList.get(currentUser);
 					//wenn user zu wenige credits hat
 					System.out.println("Checking users credits...");
-					fileinfo = (InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()));
-					if(userinfo.getCredits()<fileinfo.getSize()){
-						return new MessageResponse("Not enough credits.");
+					InfoRequest irequest = new InfoRequest(request.getFilename());
+					byte[] temphash = computeHash(irequest.toString());
+					HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, irequest);
+					HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(si),sendrequest);
+					if(validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
+						fileinfo = (InfoResponse) sendresponse.getResponse();
+						if(userinfo.getCredits()<fileinfo.getSize()){
+							return new MessageResponse("Not enough credits.");
+						}
+					}else{
+						download(request);
 					}
+//					fileinfo = (InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()));
+//					if(userinfo.getCredits()<fileinfo.getSize()){
+//						return new MessageResponse("Not enough credits.");
+//					}
 					//credits abziehen && usage erhehen
-					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize(), userinfo.isOnline()));
-					fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
-					System.out.println("Credits removed.");
+					//-------------------
+//					InfoRequest irequest = new InfoResponse(request.getFilename());
+//					byte[] temphash = computeHash(irequest.toString());
+					//HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, irequest);
+					//HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(si),sendrequest);
+					if(validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
+						fileinfo = (InfoResponse) sendresponse.getResponse();
+						fileinfo.getSize();
+						userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-(fileinfo).getSize(), userinfo.isOnline()));
+						fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
+						System.out.println("Credits removed.");
+						if(userinfo.getCredits()<fileinfo.getSize()){
+							return new MessageResponse("Not enough credits.");
+						}
+					
+					//---------------------
+//					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize(), userinfo.isOnline()));
+//					fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
+//					System.out.println("Credits removed.");
 					//stage4 part------------------
 					synchronized(downloadlist){
 						if(downloadlist.containsKey(fileinfo.getFilename()))downloadlist.put(fileinfo.getFilename(), downloadlist.get(fileinfo.getFilename())+1);
@@ -626,21 +675,36 @@ public class Proxy implements IProxyCli, Runnable {
 					//-----------------------------
 
 					//downloadticketresponse erstellen
-					return new DownloadTicketResponse(new DownloadTicket(
-							currentUser,
-							request.getFilename(),
-							ChecksumUtils.generateChecksum(
-									currentUser,
-									request.getFilename(),
-									((VersionResponse) requestToFileserver(si, new VersionRequest(request.getFilename()))).getVersion(),
-									((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize()
-									),
-									si.getAddress(),
-									si.getPort()
-							)
-							);
+					
+					
+					VersionRequest vrequest = new VersionRequest(request.getFilename());
+					byte[] versiontemphash = computeHash(vrequest.toString());
+					HashPlusObjectRequest versionsendrequest = new HashPlusObjectRequest(versiontemphash, vrequest);
+					HashPlusObjectResponse versionsendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(si),versionsendrequest);
+					if(validateHash(versionsendresponse.getHash(), computeHash(versionsendresponse.getResponse().toString()))){
+						return new DownloadTicketResponse(new DownloadTicket(
+								currentUser,
+								request.getFilename(),
+
+								ChecksumUtils.generateChecksum(
+										currentUser,
+										request.getFilename(),
+										((VersionResponse) versionsendresponse.getResponse()).getVersion(),
+										(fileinfo).getSize()
+										),
+										si.getAddress(),
+										si.getPort()
+								)
+								);
+					}else{
+						download(request);
+					}
+					
+					
 				}
 			}
+			}
+			return null;
 		}
 		/**
 		 * @see proxy.IProxy#upload(message.request.UploadRequest)
@@ -690,9 +754,16 @@ public class Proxy implements IProxyCli, Runnable {
 			//find the highest version on lowest load servers
 			int version = 0; 
 			for(FileServerInfo fs : lowestUsageServers.values()){
-				Response response = (Response) requestToFileserver(fs, new VersionRequest(request.getFilename()));
-				if(response instanceof VersionResponse){
-					VersionResponse vr = (VersionResponse) response; 
+				VersionRequest vrequest = new VersionRequest(request.getFilename());
+				byte[] temphash = computeHash(vrequest.toString());
+				HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, vrequest);
+				HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(fs),sendrequest);
+				if(!validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
+					upload(request);
+				}
+				//Response response = (Response) requestToFileserver(fs, new VersionRequest(request.getFilename()));
+				if(sendresponse.getResponse() instanceof VersionResponse){
+					VersionResponse vr = (VersionResponse) sendresponse.getResponse(); 
 					if(vr.getVersion() > version){
 						version = vr.getVersion();
 					}
@@ -700,14 +771,24 @@ public class Proxy implements IProxyCli, Runnable {
 					//nothing, file does not exist on the server which is expected behavior.
 				}
 			}
-			request = new UploadRequest(request.getFilename(), version + 1, request.getContent());
+			UploadRequest versionfixrequest = new UploadRequest(request.getFilename(), version + 1, request.getContent());
 		
 			//lazy gifford scheme: qw = gr
 			//upload to the <gw> lowest usage servers
 			for(FileServerInfo fs : lowestUsageServers.values()){
-				System.out.println("Uploading "+request.getFilename()+" to fileserver: "+fs.getPort());
+				System.out.println("Uploading "+versionfixrequest.getFilename()+" to fileserver: "+fs.getPort());
 				uploaded = true;
-				messageresponse = (MessageResponse) requestToFileserver(fs, request);
+				
+				byte[] temphash = computeHash(versionfixrequest.toString());
+				HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, versionfixrequest);
+				HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(fs),sendrequest);
+				if(!validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
+					messageresponse = (MessageResponse) sendresponse.getResponse();
+				}else{
+					upload(request);
+				}
+				
+//				messageresponse = (MessageResponse) requestToFileserver(fs, request);
 			}
 			
 			
