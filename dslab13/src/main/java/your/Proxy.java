@@ -264,7 +264,8 @@ public class Proxy implements IProxyCli, Runnable {
 							datagramSocket.receive(packet);
 							long packetrecieved = Calendar.getInstance().getTimeInMillis();
 							String s = new String(packet.getData());
-							String port = s.substring(0,5);
+							//!isAlive 12345
+							String port = s.substring(7,12);
 							isAliveAriveTimes.put(port, packetrecieved);
 
 							if(!fileServerInfoList.containsKey(port)){

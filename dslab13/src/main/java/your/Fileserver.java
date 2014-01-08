@@ -251,7 +251,8 @@ public class Fileserver implements Runnable,IFileServerCli{
 					Thread.sleep(filesConfig.getInt("fileserver.alive"));
 					InetAddress address = InetAddress.getByName(filesConfig.getString("proxy.host"));
 					byte[] buf = new byte[256];
-					buf = filesConfig.getString("tcp.port").getBytes();
+					//buf = filesConfig.getString("tcp.port").getBytes();
+					buf = new String("!alive "+filesConfig.getString("tcp.port")).getBytes();
 					DatagramPacket packet = new DatagramPacket(buf, buf.length, address, filesConfig.getInt("proxy.udp.port"));
 					datagramSocket.send(packet);
 				} catch (SocketException e) {
