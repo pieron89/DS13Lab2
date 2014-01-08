@@ -521,13 +521,12 @@ public class Client implements Runnable,IClientCli{
 		String key = null;
 		Writer writer = null;
 		File proxypublickey = new File(clientConfig.getString("keys.dir")+"/proxy.pub.pem");
-
-		if(proxypublickey.exists()){
-			System.out.println("Deleting proxy.pub.pem because it already exists.");
-			proxypublickey.delete();
-		}
 		try {
 			key = proxyremote.getProxyPublicKey();
+			if(proxypublickey.exists()){
+				System.out.println("Deleting proxy.pub.pem because it already exists.");
+				proxypublickey.delete();
+			}
 			writer = new FileWriter(proxypublickey);
 			writer.write(new String(key));
 		} catch (IOException e) {

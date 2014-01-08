@@ -912,8 +912,13 @@ public class Proxy implements IProxyCli, Runnable {
 			BufferedReader in;
 			FileReader fr;
 			String publicKey = null;
-			try {
-				fr = new FileReader(proxyConfig.getString("keys.dir")+"/proxy.pub.pem");
+			File proxypublickey = new File(proxyConfig.getString("keys.dir")+"/proxy.pub.pem");
+			
+			System.out.println(proxypublickey.getAbsolutePath());
+			System.out.println(proxypublickey.exists());
+			
+			try {		
+				fr = new FileReader(proxypublickey);
 				in = new BufferedReader(fr);
 				String line = null;
 				StringBuilder stringbuilder = new StringBuilder();
