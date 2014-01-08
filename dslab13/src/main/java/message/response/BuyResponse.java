@@ -16,14 +16,20 @@ public class BuyResponse implements Response {
 	private static final long serialVersionUID = -7058325034457705550L;
 
 	private final long credits;
+//	private final String hash;
 
 	public BuyResponse(long credits) {
 		this.credits = credits;
+//		this.hash = hash;
 	}
 
 	public long getCredits() {
 		return credits;
 	}
+	
+//	public String getHash() {
+//		return hash;
+//	}
 
 	@Override
 	public String toString() {

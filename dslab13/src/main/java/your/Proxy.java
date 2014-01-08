@@ -3,6 +3,8 @@ package your;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -21,6 +23,8 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.security.InvalidKeyException;
+import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.SecureRandom;
@@ -34,10 +38,13 @@ import java.util.Set;
 import your.Channel;
 
 import javax.crypto.KeyGenerator;
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 
 import org.bouncycastle.openssl.PEMReader;
 import org.bouncycastle.util.encoders.Base64;
+import org.bouncycastle.util.encoders.Hex;
 
 import proxy.IProxy;
 import proxy.IProxyCli;
@@ -95,7 +102,9 @@ public class Proxy implements IProxyCli, Runnable {
 	DatagramSocket datagramSocket;
 	ResourceBundle userResource;
 	
-	private int qw = 0;	
+	private int qw = 0;
+	
+	Key secretSharedKey;
 
 	public Proxy(Config proxyConfig, Shell proxyShell){
 		this.proxyConfig = proxyConfig;
@@ -116,6 +125,25 @@ public class Proxy implements IProxyCli, Runnable {
 		//stage4 part------------------
 		downloadlist = new HashMap<String, Integer>();
 		clientlist = new HashMap<String, ClientConnection>();
+		
+		byte[] keyBytes = new byte[1024];
+		FileInputStream fis;
+		try {
+			fis = new FileInputStream(proxyConfig.getString("hmac.key"));
+			fis.read(keyBytes);
+			fis.close();
+			byte[] input = Hex.decode(keyBytes);
+			// make sure to use the right ALGORITHM for what you want to do 
+			// (see text) 
+			secretSharedKey = new SecretKeySpec(input,"HmacSHA256");
+		} catch (FileNotFoundException e2) {
+			// TODO Auto-generated catch block
+			e2.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
 		try {
 			Registry reg = LocateRegistry.createRegistry(mcConfig.getInt("proxy.rmi.port"));
 			Remote bla = new ProxyRemote(this);
@@ -169,7 +197,28 @@ public class Proxy implements IProxyCli, Runnable {
 		}
 
 	}
-
+	
+	private byte[] computeHash(String tostring){
+				// make sure to use the right ALGORITHM for what you want to do 
+				// (see text) 
+				Mac hMac;
+				byte[] hash = null;
+				try {
+					hMac = Mac.getInstance("HmacSHA256");
+					hMac.init(secretSharedKey);
+					// MESSAGE is the message to sign in bytes 
+					hMac.update(tostring.getBytes());
+					hash = Base64.encode(hMac.doFinal());
+				} catch (NoSuchAlgorithmException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (InvalidKeyException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} 
+		
+		return hash;
+	}
 
 
 	private Object requestToFileserver(FileServerInfo fsi, Request request){
