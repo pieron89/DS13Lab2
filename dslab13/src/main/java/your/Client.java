@@ -83,6 +83,7 @@ public class Client implements Runnable,IClientCli{
 	//Registry
 	Registry registry;
 	IRemote proxyremote;
+	ArrayList<Callback> callbackList;
 
 
 	public Client(Config clientConfig, Shell clientShell) {
@@ -92,6 +93,7 @@ public class Client implements Runnable,IClientCli{
 		mcConfig = new Config("mc");
 		this.clientShell.register(this); //register methodes marked with Command
 		shellThread = new Thread(clientShell);
+		callbackList = new ArrayList<Callback>();
 
 	}
 
@@ -507,9 +509,13 @@ public class Client implements Runnable,IClientCli{
 
 	@Command
 	public void subscribe(String filename, int numberOfDownloads){
-
+		
 		try {
-			proxyremote.subscribe(username, filename, numberOfDownloads, new Callback());
+			synchronized(callbackList){
+			Callback call = new Callback();
+			proxyremote.subscribe(username, filename, numberOfDownloads, call);
+			callbackList.add(call);
+			}
 		} catch (RemoteException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -576,6 +582,10 @@ public class Client implements Runnable,IClientCli{
 	public MessageResponse exit() throws IOException {
 		proxyChannel.close();
 		System.in.close();
+		
+		for(Callback call: callbackList){
+			Callback.unexportObject(call, true);
+		}
 		return new MessageResponse("Client exited successfully.");
 	}
 

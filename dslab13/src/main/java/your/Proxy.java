@@ -96,7 +96,7 @@ public class Proxy implements IProxyCli, Runnable {
 	HashMap<String, ClientConnection> clientlist;
 	//-----------------------------
 	List<Socket> clientSocketList;
-	List<Channel> clientChannelList;
+	List<TCPChannel> clientChannelList;
 
 	Thread shellThread;
 	Thread isAliveThread;
@@ -108,6 +108,8 @@ public class Proxy implements IProxyCli, Runnable {
 	private int qw = 0;
 	
 	Key secretSharedKey;
+	Registry reg;
+	IRemote bla;
 
 	public Proxy(Config proxyConfig, Shell proxyShell){
 		this.proxyConfig = proxyConfig;
@@ -124,7 +126,7 @@ public class Proxy implements IProxyCli, Runnable {
 
 		fileServerInfoList = new HashMap<String,FileServerInfo>();
 		clientSocketList = new ArrayList<Socket>();
-		clientChannelList = new ArrayList<Channel>();
+		clientChannelList = new ArrayList<TCPChannel>();
 		//stage4 part------------------
 		downloadlist = new HashMap<String, Integer>();
 		clientlist = new HashMap<String, ClientConnection>();
@@ -148,8 +150,8 @@ public class Proxy implements IProxyCli, Runnable {
 		}
 		
 		try {
-			Registry reg = LocateRegistry.createRegistry(mcConfig.getInt("proxy.rmi.port"));
-			Remote bla = new ProxyRemote(this);
+			reg = LocateRegistry.createRegistry(mcConfig.getInt("proxy.rmi.port"));
+			bla = new ProxyRemote(this);
 			reg.bind("proxyremote", bla);
 		} catch (RemoteException e1) {
 			// TODO Auto-generated catch block
@@ -293,13 +295,15 @@ public class Proxy implements IProxyCli, Runnable {
 			System.in.close();
 			datagramSocket.close();
 			serverSocket.close();
-			for(Socket socket : clientSocketList){
-				socket.close();
+			for(TCPChannel tcpchannel : clientChannelList){
+				tcpchannel.close();
 			}
-
+			reg.unbind("proxyremote");
+			ProxyRemote.unexportObject(bla, true);
+			
 			return new MessageResponse("Proxy existed successfully.");
 		}catch(Exception e){
-			return new MessageResponse("Proxy existed successfully.");
+			return new MessageResponse("Proxy existed successfully. throw up");
 		}
 	}
 

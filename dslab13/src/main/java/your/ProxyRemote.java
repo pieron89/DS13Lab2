@@ -1,6 +1,7 @@
 package your;
 
 import java.util.ArrayList;
+import java.rmi.NoSuchObjectException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.PublicKey;
 
