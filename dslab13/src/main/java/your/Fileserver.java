@@ -278,7 +278,7 @@ public class Fileserver implements Runnable,IFileServerCli{
 		if(fileList.containsKey(request.getFilename())){
 			return new VersionResponse(request.getFilename(), fileList.get(request.getFilename()));	
 		}
-		return new MessageResponse("File does not exist on the server.");
+		return new VersionResponse("File does not exist on the server.", -1);
 
 	}
 	/**

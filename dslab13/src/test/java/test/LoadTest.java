@@ -164,11 +164,13 @@ public class LoadTest {
 			if(keyfile2.exists())keyfile2.delete();
 		}*/
 		//deleting all new upload files
-		for(int i=1;i<c;i++){
-			File upfile = new File(fs1cfg.getString("fileserver.dir")+"/"+c+upnewfile);
+		for(int i=1;i<=c;i++){
+			File upfile = new File(fs1cfg.getString("fileserver.dir")+"/"+i+upnewfile);
 			if(upfile.exists())upfile.delete();
-			File upfile2 = new File(fs2cfg.getString("fileserver.dir")+"/"+c+upnewfile);
+			File upfile2 = new File(fs2cfg.getString("fileserver.dir")+"/"+i+upnewfile);
 			if(upfile2.exists())upfile2.delete();
+			File upfile3 = new File(clientcfg.getString("download.dir")+"/"+i+upnewfile);
+			if(upfile3.exists())upfile3.delete();
 		}
 		//deleting new download file
 		File temp = new File(fs1cfg.getString("fileserver.dir")+"/"+downnewfile);
@@ -209,7 +211,7 @@ public class LoadTest {
 		float uploadCountNew = 0;
 		//DOWNLOADS AND UPLOADS
 		int min = 1; //test duration in minutes
-		while((currTime-startTime)<(10000)){ //
+		while((currTime-startTime)<(60000)){ //
 			//compute time between frames
 			currTime = Calendar.getInstance().getTimeInMillis();
 			frameTime = ((currTime-prevTime)/1000.0f);
