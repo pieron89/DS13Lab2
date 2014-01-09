@@ -104,9 +104,9 @@ public class Proxy implements IProxyCli, Runnable {
 	ServerSocket serverSocket;
 	DatagramSocket datagramSocket;
 	ResourceBundle userResource;
-	
+
 	private int qw = 0;
-	
+
 	Key secretSharedKey;
 	Registry reg;
 	IRemote bla;
@@ -130,7 +130,7 @@ public class Proxy implements IProxyCli, Runnable {
 		//stage4 part------------------
 		downloadlist = new HashMap<String, Integer>();
 		clientlist = new HashMap<String, ClientConnection>();
-		
+
 		byte[] keyBytes = new byte[1024];
 		FileInputStream fis;
 		try {
@@ -148,7 +148,7 @@ public class Proxy implements IProxyCli, Runnable {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
+
 		try {
 			reg = LocateRegistry.createRegistry(mcConfig.getInt("proxy.rmi.port"));
 			bla = new ProxyRemote(this);
@@ -202,33 +202,33 @@ public class Proxy implements IProxyCli, Runnable {
 		}
 
 	}
-	
+
 	private byte[] computeHash(String tostring){
-				// make sure to use the right ALGORITHM for what you want to do 
-				// (see text) 
-				Mac hMac;
-				byte[] hash = null;
-				try {
-					hMac = Mac.getInstance("HmacSHA256");
-					hMac.init(secretSharedKey);
-					// MESSAGE is the message to sign in bytes 
-					hMac.update(tostring.getBytes());
-					hash = Base64.encode(hMac.doFinal());
-				} catch (NoSuchAlgorithmException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				} catch (InvalidKeyException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				} 
-		
+		// make sure to use the right ALGORITHM for what you want to do 
+		// (see text) 
+		Mac hMac;
+		byte[] hash = null;
+		try {
+			hMac = Mac.getInstance("HmacSHA256");
+			hMac.init(secretSharedKey);
+			// MESSAGE is the message to sign in bytes 
+			hMac.update(tostring.getBytes());
+			hash = Base64.encode(hMac.doFinal());
+		} catch (NoSuchAlgorithmException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidKeyException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} 
+
 		return hash;
 	}
-	
+
 	private boolean validateHash(byte[] computedHash, byte[] receivedHash){
 		return MessageDigest.isEqual(computedHash,receivedHash);
 	}
-	
+
 
 	private Object requestToFileserver(FileServerInfo fsi, HashPlusObjectRequest request){
 		//kurze tcp verbindung zum fileserver aufbauen um request zu verschicken und response zu erhalten
@@ -300,7 +300,7 @@ public class Proxy implements IProxyCli, Runnable {
 			}
 			reg.unbind("proxyremote");
 			ProxyRemote.unexportObject(bla, true);
-			
+
 			return new MessageResponse("Proxy existed successfully.");
 		}catch(Exception e){
 			return new MessageResponse("Proxy existed successfully. throw up");
@@ -314,53 +314,53 @@ public class Proxy implements IProxyCli, Runnable {
 		public void run() {
 			isAliveAriveTimes = new HashMap<String, Long>();
 			//synchronized(fileServerInfoList){
-				try {
-					datagramSocket = new DatagramSocket(proxyConfig.getInt("udp.port"));
-					datagramSocket.setSoTimeout(1200);
-					byte[] buf = new byte[256];
-					while(true){
-						long curTime = Calendar.getInstance().getTimeInMillis();
-						DatagramPacket packet = new DatagramPacket(buf, buf.length);
-						try{
-							datagramSocket.receive(packet);
-							long packetrecieved = Calendar.getInstance().getTimeInMillis();
-							String s = new String(packet.getData());
-							//!isAlive 12345
-							String port = s.substring(7,12);
-							isAliveAriveTimes.put(port, packetrecieved);
+			try {
+				datagramSocket = new DatagramSocket(proxyConfig.getInt("udp.port"));
+				datagramSocket.setSoTimeout(1200);
+				byte[] buf = new byte[256];
+				while(true){
+					long curTime = Calendar.getInstance().getTimeInMillis();
+					DatagramPacket packet = new DatagramPacket(buf, buf.length);
+					try{
+						datagramSocket.receive(packet);
+						long packetrecieved = Calendar.getInstance().getTimeInMillis();
+						String s = new String(packet.getData());
+						//!isAlive 12345
+						String port = s.substring(7,12);
+						isAliveAriveTimes.put(port, packetrecieved);
 
-							if(!fileServerInfoList.containsKey(port)){
-								fileServerInfoList.put(port, new FileServerInfo(packet.getAddress(), Integer.parseInt(port), 0, true));
-							}else if(fileServerInfoList.containsKey(port)&&fileServerInfoList.get(port).isOnline()==false){
-								FileServerInfo temp;
-								temp = new FileServerInfo(fileServerInfoList.get(port).getAddress(),
-										fileServerInfoList.get(port).getPort(),
-										fileServerInfoList.get(port).getUsage(),
-										true);
-								fileServerInfoList.put(port, temp);
+						if(!fileServerInfoList.containsKey(port)){
+							fileServerInfoList.put(port, new FileServerInfo(packet.getAddress(), Integer.parseInt(port), 0, true));
+						}else if(fileServerInfoList.containsKey(port)&&fileServerInfoList.get(port).isOnline()==false){
+							FileServerInfo temp;
+							temp = new FileServerInfo(fileServerInfoList.get(port).getAddress(),
+									fileServerInfoList.get(port).getPort(),
+									fileServerInfoList.get(port).getUsage(),
+									true);
+							fileServerInfoList.put(port, temp);
+						}
+
+					}catch (SocketTimeoutException e) {
+					}
+					keyset = isAliveAriveTimes.keySet();
+
+					for(String g:keyset){
+						if(Math.abs((isAliveAriveTimes.get(g)- curTime )) > (proxyConfig.getInt("fileserver.checkPeriod")+100)){
+							if(fileServerInfoList.get(g).isOnline()){
+								FileServerInfo temp = new FileServerInfo(fileServerInfoList.get(g).getAddress(),
+										fileServerInfoList.get(g).getPort(),
+										fileServerInfoList.get(g).getUsage(),
+										false);
+								fileServerInfoList.put(g, temp);
 							}
-
-						}catch (SocketTimeoutException e) {
-						}
-						keyset = isAliveAriveTimes.keySet();
-
-						for(String g:keyset){
-							if(Math.abs((isAliveAriveTimes.get(g)- curTime )) > (proxyConfig.getInt("fileserver.checkPeriod")+100)){
-								if(fileServerInfoList.get(g).isOnline()){
-									FileServerInfo temp = new FileServerInfo(fileServerInfoList.get(g).getAddress(),
-											fileServerInfoList.get(g).getPort(),
-											fileServerInfoList.get(g).getUsage(),
-											false);
-									fileServerInfoList.put(g, temp);
-								}
-							} 
-						}
-					} 
-				} catch (SocketException e) {
-					System.out.println("datagramSocket closed.");
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
+						} 
+					}
+				} 
+			} catch (SocketException e) {
+				System.out.println("datagramSocket closed.");
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 			//}
 		}		
 	}
@@ -378,11 +378,11 @@ public class Proxy implements IProxyCli, Runnable {
 		private ICallback callback;
 		private HashMap<String, Integer> subscribtions = new HashMap<String, Integer>();
 		//-----------------------------
-		
+
 		//variables for gilford versioning, N = number of file servers
 		//private int qw = 0;		//write quorum, (N/2 + 1)
 		// private int qr = 0;		//read quorum, qr = qw because lazy
-		
+
 		public ClientConnection(TCPChannel clientChannel) {
 			//this.clientSocket = clientSocket;
 			this.clientChannel = clientChannel;
@@ -406,9 +406,12 @@ public class Proxy implements IProxyCli, Runnable {
 					if(currentUser==null){
 						request = deserialize(RSA64TCPChannel.receive());
 						if(request.getClass()==LoginChallengeRequest.class){
-							if(!userInfoList.get(((LoginChallengeRequest) request).getUsername()).isOnline()){
-								AES64TCPChannel.send(serialize(login((LoginChallengeRequest) request)));
-							}
+							//							if(!userInfoList.get(((LoginChallengeRequest) request).getUsername()).isOnline()){
+							AES64TCPChannel.send(serialize(login((LoginChallengeRequest) request)));
+							//							}
+							//							else{
+							//								AES64TCPChannel.send(serialize(new LoginResponse(Type.WRONG_CREDENTIALS)));
+							//							}
 						}
 					}else{
 						request = deserialize(AES64TCPChannel.receive());
@@ -463,16 +466,16 @@ public class Proxy implements IProxyCli, Runnable {
 						else outputs.writeObject(new MessageResponse("Please log in first."));
 					}*/
 				}
-//			}
-//			catch (EOFException e){
-//						
+				//			}
+				//			catch (EOFException e){
+				//						
 			}catch (IOException e) {
 				try {
 					if(currentUser!=null){
 						logout();
 					}
 					clientChannel.close();
-//					Thread.currentThread().interrupt();
+					//					Thread.currentThread().interrupt();
 				} catch (IOException e1) {
 					e1.printStackTrace();
 				}
@@ -492,42 +495,45 @@ public class Proxy implements IProxyCli, Runnable {
 		 */
 		public LoginResponse login(LoginChallengeRequest request) throws IOException, NoSuchAlgorithmException, ClassNotFoundException {
 			synchronized(userInfoList){
-				RSA64TCPChannel.setPublicKey(proxyConfig.getString("keys.dir")+"/"+request.getUsername()+".pub.pem");
-				// generates a 32 byte secure random number 
-				SecureRandom secureRandom = new SecureRandom(); 
-				final byte[] proxyChallenge = new byte[32]; 
-				secureRandom.nextBytes(proxyChallenge);
-				// generates a 16 byte secure random number
-				SecureRandom secureRandom2 = new SecureRandom(); 
-				final byte[] iv = new byte[16]; 
-				secureRandom2.nextBytes(iv);
-				byte[] ivBase64 = Base64.encode(iv);
-				// generating a 256 bits secretkey
-				KeyGenerator generator = KeyGenerator.getInstance("AES"); 
-				generator.init(256); 
-				SecretKey secretKey = generator.generateKey();
-				byte[] secretKeyBase64 = Base64.encode(secretKey.getEncoded());
-				//secretKey = new SecretKeySpec(secretKeyBase64, 0, secretKeyBase64.length, "AES");
-				//sending 2nd message
-				RSA64TCPChannel.send(serialize(new OkResponse(Base64.encode(request.getclientChallenge()), Base64.encode(proxyChallenge), secretKeyBase64, ivBase64)));
-				AES64TCPChannel.setAESSecretKey(secretKey);
-				AES64TCPChannel.setAESiv(iv);
-				byte[] response = AES64TCPChannel.receive();
-				System.out.println(new String(Base64.decode(response)));
-				System.out.println(new String(proxyChallenge));
-				if(Arrays.equals(Base64.decode(response), (proxyChallenge))){
-					System.out.println("client challenge passed.");
-					currentUser = request.getUsername();
-					UserInfo userinfo = userInfoList.get(currentUser);
-					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
-					//stage4 part------------------
-					synchronized(clientlist){
-						clientlist.put(currentUser, this);
+					RSA64TCPChannel.setPublicKey(proxyConfig.getString("keys.dir")+"/"+request.getUsername()+".pub.pem");
+					// generates a 32 byte secure random number 
+					SecureRandom secureRandom = new SecureRandom(); 
+					final byte[] proxyChallenge = new byte[32]; 
+					secureRandom.nextBytes(proxyChallenge);
+					// generates a 16 byte secure random number
+					SecureRandom secureRandom2 = new SecureRandom(); 
+					final byte[] iv = new byte[16]; 
+					secureRandom2.nextBytes(iv);
+					byte[] ivBase64 = Base64.encode(iv);
+					// generating a 256 bits secretkey
+					KeyGenerator generator = KeyGenerator.getInstance("AES"); 
+					generator.init(256); 
+					SecretKey secretKey = generator.generateKey();
+					byte[] secretKeyBase64 = Base64.encode(secretKey.getEncoded());
+					//secretKey = new SecretKeySpec(secretKeyBase64, 0, secretKeyBase64.length, "AES");
+					//sending 2nd message
+					RSA64TCPChannel.send(serialize(new OkResponse(Base64.encode(request.getclientChallenge()), Base64.encode(proxyChallenge), secretKeyBase64, ivBase64)));
+					AES64TCPChannel.setAESSecretKey(secretKey);
+					AES64TCPChannel.setAESiv(iv);
+					byte[] response = AES64TCPChannel.receive();
+					System.out.println(new String(Base64.decode(response)));
+					System.out.println(new String(proxyChallenge));
+					if(Arrays.equals(Base64.decode(response), (proxyChallenge))){
+						System.out.println("client challenge passed.");
+						if(userInfoList.get(request.getUsername()).isOnline()){
+							return new LoginResponse(Type.WRONG_CREDENTIALS);
+						}
+						currentUser = request.getUsername();
+						UserInfo userinfo = userInfoList.get(currentUser);
+						userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits(), true));
+						//stage4 part------------------
+						synchronized(clientlist){
+							clientlist.put(currentUser, this);
+						}
+						//-----------------------------
+						return new LoginResponse(Type.SUCCESS);
 					}
-					//-----------------------------
-					return new LoginResponse(Type.SUCCESS);
-				}
-			return new LoginResponse(Type.WRONG_CREDENTIALS);
+				return new LoginResponse(Type.WRONG_CREDENTIALS);
 			}
 		}
 		@Override
@@ -584,7 +590,7 @@ public class Proxy implements IProxyCli, Runnable {
 						System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
 						list();
 					}
-					
+
 					//return (Response) requestToFileserver(fileServerInfoList.get(s),new ListRequest());
 				}
 			}
@@ -641,14 +647,14 @@ public class Proxy implements IProxyCli, Runnable {
 						System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
 						download(request);
 					}
-//					fileinfo = (InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()));
-//					if(userinfo.getCredits()<fileinfo.getSize()){
-//						return new MessageResponse("Not enough credits.");
-//					}
+					//					fileinfo = (InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()));
+					//					if(userinfo.getCredits()<fileinfo.getSize()){
+					//						return new MessageResponse("Not enough credits.");
+					//					}
 					//credits abziehen && usage erhehen
 					//-------------------
-//					InfoRequest irequest = new InfoResponse(request.getFilename());
-//					byte[] temphash = computeHash(irequest.toString());
+					//					InfoRequest irequest = new InfoResponse(request.getFilename());
+					//					byte[] temphash = computeHash(irequest.toString());
 					//HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, irequest);
 					//HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fileServerInfoList.get(si),sendrequest);
 					if(validateHash(sendresponse.getHash(), computeHash(sendresponse.getResponse().toString()))){
@@ -660,64 +666,64 @@ public class Proxy implements IProxyCli, Runnable {
 						if(userinfo.getCredits()<fileinfo.getSize()){
 							return new MessageResponse("Not enough credits.");
 						}
-					
-					//---------------------
-//					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize(), userinfo.isOnline()));
-//					fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
-//					System.out.println("Credits removed.");
-					//stage4 part------------------
-					synchronized(downloadlist){
-						if(downloadlist.containsKey(fileinfo.getFilename()))downloadlist.put(fileinfo.getFilename(), downloadlist.get(fileinfo.getFilename())+1);
-						else downloadlist.put(fileinfo.getFilename(), 1);
-					}
-					Set<String> clients = clientlist.keySet();
-					for(String s : clients){
-						ClientConnection c = clientlist.get(s);
-						synchronized(c.subscribtions){
-							if(c.subscribtions.containsKey(fileinfo.getFilename())){
-								if(c.subscribtions.get(fileinfo.getFilename())<=downloadlist.get(fileinfo.getFilename())){
-									String notify = "Notification: "+fileinfo.getFilename()+" got downloaded "+c.subscribtions.get(fileinfo.getFilename())+" times!.";
-									c.notifyClient(notify);
-									c.subscribtions.remove(fileinfo.getFilename());
+
+						//---------------------
+						//					userInfoList.put(currentUser, new UserInfo(userinfo.getName(), userinfo.getCredits()-((InfoResponse) requestToFileserver(si, new InfoRequest(request.getFilename()))).getSize(), userinfo.isOnline()));
+						//					fileServerInfoList.put(fileservername, new FileServerInfo(si.getAddress(), si.getPort(), (si.getUsage()+fileinfo.getSize()), si.isOnline()));
+						//					System.out.println("Credits removed.");
+						//stage4 part------------------
+						synchronized(downloadlist){
+							if(downloadlist.containsKey(fileinfo.getFilename()))downloadlist.put(fileinfo.getFilename(), downloadlist.get(fileinfo.getFilename())+1);
+							else downloadlist.put(fileinfo.getFilename(), 1);
+						}
+						Set<String> clients = clientlist.keySet();
+						for(String s : clients){
+							ClientConnection c = clientlist.get(s);
+							synchronized(c.subscribtions){
+								if(c.subscribtions.containsKey(fileinfo.getFilename())){
+									if(c.subscribtions.get(fileinfo.getFilename())<=downloadlist.get(fileinfo.getFilename())){
+										String notify = "Notification: "+fileinfo.getFilename()+" got downloaded "+c.subscribtions.get(fileinfo.getFilename())+" times!.";
+										c.notifyClient(notify);
+										c.subscribtions.remove(fileinfo.getFilename());
+									}
 								}
 							}
 						}
-					}
-					//-----------------------------
+						//-----------------------------
 
-					//downloadticketresponse erstellen
-					
-					
-					VersionRequest vrequest = new VersionRequest(request.getFilename());
-					byte[] versiontemphash = computeHash(vrequest.toString());
-					HashPlusObjectRequest versionsendrequest = new HashPlusObjectRequest(versiontemphash, vrequest);
-					HashPlusObjectResponse versionsendresponse = (HashPlusObjectResponse) requestToFileserver(si,versionsendrequest);
-					if(validateHash(versionsendresponse.getHash(), computeHash(versionsendresponse.getResponse().toString()))){
-						if(versionsendresponse.getResponse() instanceof MessageResponse){
-							System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
+						//downloadticketresponse erstellen
+
+
+						VersionRequest vrequest = new VersionRequest(request.getFilename());
+						byte[] versiontemphash = computeHash(vrequest.toString());
+						HashPlusObjectRequest versionsendrequest = new HashPlusObjectRequest(versiontemphash, vrequest);
+						HashPlusObjectResponse versionsendresponse = (HashPlusObjectResponse) requestToFileserver(si,versionsendrequest);
+						if(validateHash(versionsendresponse.getHash(), computeHash(versionsendresponse.getResponse().toString()))){
+							if(versionsendresponse.getResponse() instanceof MessageResponse){
+								System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
+								download(request);
+							}
+							return new DownloadTicketResponse(new DownloadTicket(
+									currentUser,
+									request.getFilename(),
+
+									ChecksumUtils.generateChecksum(
+											currentUser,
+											request.getFilename(),
+											((VersionResponse) versionsendresponse.getResponse()).getVersion(),
+											(fileinfo).getSize()
+											),
+											si.getAddress(),
+											si.getPort()
+									)
+									);
+						}else{
 							download(request);
 						}
-						return new DownloadTicketResponse(new DownloadTicket(
-								currentUser,
-								request.getFilename(),
 
-								ChecksumUtils.generateChecksum(
-										currentUser,
-										request.getFilename(),
-										((VersionResponse) versionsendresponse.getResponse()).getVersion(),
-										(fileinfo).getSize()
-										),
-										si.getAddress(),
-										si.getPort()
-								)
-								);
-					}else{
-						download(request);
+
 					}
-					
-					
 				}
-			}
 			}
 			return null;
 		}
@@ -729,8 +735,8 @@ public class Proxy implements IProxyCli, Runnable {
 			System.out.println("Received Uploadrequest from "+currentUser);
 			boolean uploaded = false;
 			MessageResponse messageresponse = new MessageResponse("Could not upload file.");
-			
-			
+
+
 			//find number of servers and set read/write quorum
 			if(qw == 0){ //should only be done at the first upload according to the assignment
 				int n = 0;
@@ -789,13 +795,13 @@ public class Proxy implements IProxyCli, Runnable {
 				}
 			}
 			UploadRequest versionfixrequest = new UploadRequest(request.getFilename(), version + 1, request.getContent());
-		
+
 			//lazy gifford scheme: qw = gr
 			//upload to the <gw> lowest usage servers
 			for(FileServerInfo fs : lowestUsageServers.values()){
 				System.out.println("Uploading "+versionfixrequest.getFilename()+" to fileserver: "+fs.getPort());
 				uploaded = true;
-				
+
 				byte[] temphash = computeHash(versionfixrequest.toString());
 				HashPlusObjectRequest sendrequest = new HashPlusObjectRequest(temphash, versionfixrequest);
 				HashPlusObjectResponse sendresponse = (HashPlusObjectResponse) requestToFileserver(fs,sendrequest);
@@ -807,13 +813,13 @@ public class Proxy implements IProxyCli, Runnable {
 					System.out.println("Hashfehler: "+sendresponse.getResponse().toString());
 					upload(request);
 				}
-				
-//				messageresponse = (MessageResponse) requestToFileserver(fs, request);
+
+				//				messageresponse = (MessageResponse) requestToFileserver(fs, request);
 			}
-			
-			
-			
-			
+
+
+
+
 			//credits hinzufuegen
 			synchronized(userInfoList){
 				if(uploaded){
@@ -869,116 +875,116 @@ public class Proxy implements IProxyCli, Runnable {
 		return is.readObject();
 	}
 	//REMOTE-METHODS----------------------------------------------------------------------------------------------
-		public int getReadQuorum(){
-			//return somelist.size();???
-			return qw;
-		}
+	public int getReadQuorum(){
+		//return somelist.size();???
+		return qw;
+	}
 
-		public int getWriteQuorum(){
-			//return someotherlist.size();???
-			return qw;
-		}
+	public int getWriteQuorum(){
+		//return someotherlist.size();???
+		return qw;
+	}
 
-		public String getTopThreeDownloads(){
-			ArrayList<String> top3list = new ArrayList<String>();
-			Set<String> keyset = downloadlist.keySet();
- 			String filename;
-			String returnstring = "Top Three Downloads:";
-			int count;
-			int stringcounter = 1;
-			for(int i=0;i<3;i++){
-				count = 0;
-				filename = null;
-				for(String s : keyset){
-					if(downloadlist.get(s)>count
-							&&!top3list.contains(s+" "+downloadlist.get(s))){
-						count=downloadlist.get(s);
-						filename = s;
-					}
-				}
-				//keyset.remove(filename);
-				if(filename!=null&&!top3list.contains(filename+" "+count)){
-					top3list.add(filename+" "+count);
-					//returnstring += stringcounter+". "+filename+" "+count;
+	public String getTopThreeDownloads(){
+		ArrayList<String> top3list = new ArrayList<String>();
+		Set<String> keyset = downloadlist.keySet();
+		String filename;
+		String returnstring = "Top Three Downloads:";
+		int count;
+		int stringcounter = 1;
+		for(int i=0;i<3;i++){
+			count = 0;
+			filename = null;
+			for(String s : keyset){
+				if(downloadlist.get(s)>count
+						&&!top3list.contains(s+" "+downloadlist.get(s))){
+					count=downloadlist.get(s);
+					filename = s;
 				}
 			}
-			for(String s: top3list){
-				System.out.println(top3list.size());
-				returnstring += "\n"+stringcounter+". "+s;
-				stringcounter++;
+			//keyset.remove(filename);
+			if(filename!=null&&!top3list.contains(filename+" "+count)){
+				top3list.add(filename+" "+count);
+				//returnstring += stringcounter+". "+filename+" "+count;
 			}
-			
-			return returnstring;
+		}
+		for(String s: top3list){
+			System.out.println(top3list.size());
+			returnstring += "\n"+stringcounter+". "+s;
+			stringcounter++;
 		}
 
-		public void subscribe(String username, String filename, int count, ICallback callback){
-			//create new Subscribtion with filename,count and save callback
-			if(clientlist.containsKey(username)){
+		return returnstring;
+	}
+
+	public void subscribe(String username, String filename, int count, ICallback callback){
+		//create new Subscribtion with filename,count and save callback
+		if(clientlist.containsKey(username)){
 			clientlist.get(username).subscribe(filename, count, callback);
-			}else{
-				try {
-					callback.notifyMe("Please login first!");
-				} catch (RemoteException e) {
-					System.out.println("Callback bei Subscriptionfehler RemoteException.");
-					//e.printStackTrace();
-				}
-			}
-			
-		}
-
-		public String getProxyPublicKey(){
-			BufferedReader in;
-			FileReader fr;
-			String publicKey = null;
-			File proxypublickey = new File(proxyConfig.getString("keys.dir")+"/proxy.pub.pem");
-			
-			System.out.println(proxypublickey.getAbsolutePath());
-			System.out.println(proxypublickey.exists());
-			
-			try {		
-				fr = new FileReader(proxypublickey);
-				in = new BufferedReader(fr);
-				String line = null;
-				StringBuilder stringbuilder = new StringBuilder();
-				String lineseperator = System.getProperty("line.separator");
-				while((line = in.readLine()) != null) {
-					stringbuilder.append(line);
-					stringbuilder.append(lineseperator);
-				}
-				in.close();
-				fr.close();
-				publicKey = (String) stringbuilder.toString();
-				System.out.println(publicKey);
-			} catch (FileNotFoundException e) {
-				System.out.println("Could not find file: proxy.pub.pem");
-				//e.printStackTrace();
-			} catch (IOException e) {
-				System.out.println("gugugugCould not access file: proxy.pub.pem");
-				//e.printStackTrace();
-			} 
-
-			return publicKey;
-		}
-
-		public void setUserPublicKey(String username, String key){
-			Writer writer = null;
-			File userpublickey = new File(proxyConfig.getString("keys.dir")+"/"+username+".pub.pem");
-			if(userpublickey.exists()){
-				System.out.println("Deleting "+username+".pub.pem"+" because it already exists.");
-				userpublickey.delete();
-			}
+		}else{
 			try {
-				writer = new FileWriter(userpublickey);
-				writer.write(new String(key));
-			} catch (IOException e) {
-				System.out.println("Could not write File: "+username+".pub.pem");
-			} finally {
-				if (writer != null)
-					try {
-						writer.close();
-					} catch (IOException e) {
-					}
+				callback.notifyMe("Please login first!");
+			} catch (RemoteException e) {
+				System.out.println("Callback bei Subscriptionfehler RemoteException.");
+				//e.printStackTrace();
 			}
 		}
+
+	}
+
+	public String getProxyPublicKey(){
+		BufferedReader in;
+		FileReader fr;
+		String publicKey = null;
+		File proxypublickey = new File(proxyConfig.getString("keys.dir")+"/proxy.pub.pem");
+
+		System.out.println(proxypublickey.getAbsolutePath());
+		System.out.println(proxypublickey.exists());
+
+		try {		
+			fr = new FileReader(proxypublickey);
+			in = new BufferedReader(fr);
+			String line = null;
+			StringBuilder stringbuilder = new StringBuilder();
+			String lineseperator = System.getProperty("line.separator");
+			while((line = in.readLine()) != null) {
+				stringbuilder.append(line);
+				stringbuilder.append(lineseperator);
+			}
+			in.close();
+			fr.close();
+			publicKey = (String) stringbuilder.toString();
+			System.out.println(publicKey);
+		} catch (FileNotFoundException e) {
+			System.out.println("Could not find file: proxy.pub.pem");
+			//e.printStackTrace();
+		} catch (IOException e) {
+			System.out.println("gugugugCould not access file: proxy.pub.pem");
+			//e.printStackTrace();
+		} 
+
+		return publicKey;
+	}
+
+	public void setUserPublicKey(String username, String key){
+		Writer writer = null;
+		File userpublickey = new File(proxyConfig.getString("keys.dir")+"/"+username+".pub.pem");
+		if(userpublickey.exists()){
+			System.out.println("Deleting "+username+".pub.pem"+" because it already exists.");
+			userpublickey.delete();
+		}
+		try {
+			writer = new FileWriter(userpublickey);
+			writer.write(new String(key));
+		} catch (IOException e) {
+			System.out.println("Could not write File: "+username+".pub.pem");
+		} finally {
+			if (writer != null)
+				try {
+					writer.close();
+				} catch (IOException e) {
+				}
+		}
+	}
 
 }
