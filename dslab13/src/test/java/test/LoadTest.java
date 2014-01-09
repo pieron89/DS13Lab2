@@ -70,14 +70,14 @@ public class LoadTest {
 		}
 		bufferedreader.close();
 		userpropertiesBackup=stringbuilder.toString();
-		for(int i=0;i<loadtestcfg.getInt("clients");i++){
+		/*for(int i=0;i<loadtestcfg.getInt("clients");i++){
 			//editing user.properties
 			stringbuilder.append("client"+i+".credits = "+"1000");
 			stringbuilder.append(lineseperator);
 			stringbuilder.append("client"+i+".password = "+"12345");
 			stringbuilder.append(lineseperator);
 			generateKeys("client"+i);
-		}
+		}*/
 		//overwriting user.properties
 				Writer writer = null;
 				if(userfile.exists()){
@@ -156,13 +156,13 @@ public class LoadTest {
 				} catch (IOException e) {
 				}
 		}
-		//deleting key copies
+		/*//deleting key copies
 		for(int i=0;i<loadtestcfg.getInt("clients");i++){
 			File keyfile = new File(clientcfg.getString("keys.dir")+"/client"+i+".pub.pem");
 			if(keyfile.exists())keyfile.delete();
 			File keyfile2 = new File(clientcfg.getString("keys.dir")+"/client"+i+".pem");
 			if(keyfile2.exists())keyfile2.delete();
-		}
+		}*/
 		//deleting all new upload files
 		for(int i=1;i<c;i++){
 			File upfile = new File(fs1cfg.getString("fileserver.dir")+"/"+c+upnewfile);
@@ -204,7 +204,7 @@ public class LoadTest {
 		currTime = startTime;
 		float downRate = 60/(loadtestcfg.getInt("downloadsPerMin"));
 		float upRate = 60/(loadtestcfg.getInt("uploadsPerMin"));
-		float overwriteRatio = loadtestcfg.getInt("overwriteRatio");
+		float overwriteRatio = loadtestcfg.getInt("overwriteRatio")/100.0f;
 		float uploadCountOverwrite = 0;
 		float uploadCountNew = 0;
 		//DOWNLOADS AND UPLOADS
@@ -229,8 +229,9 @@ public class LoadTest {
 					}
 					else{
 						c++;
-						generateRandomFile(size, clientcfg.getString("download.dir")+"/"+c+upnewfile);
-						client.upload(upnewfile); //upload new file TODO: enter filename
+						String filename = c+upnewfile;
+						generateRandomFile(size, clientcfg.getString("download.dir")+"/"+filename);
+						client.upload(filename); //upload new file TODO: enter filename
 						uploadCountNew++;
 					}
 				}
