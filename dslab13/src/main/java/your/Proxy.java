@@ -876,10 +876,9 @@ public class Proxy implements IProxyCli, Runnable {
 		}
 
 		public String getTopThreeDownloads(){
-			//return downloadlist;
 			ArrayList<String> top3list = new ArrayList<String>();
-			ArrayList<String> keyset = new ArrayList<String>(downloadlist.keySet());
-			String filename;
+			Set<String> keyset = downloadlist.keySet();
+ 			String filename;
 			String returnstring = "Top Three Downloads:";
 			int count;
 			int stringcounter = 1;
@@ -887,12 +886,13 @@ public class Proxy implements IProxyCli, Runnable {
 				count = 0;
 				filename = null;
 				for(String s : keyset){
-					if(downloadlist.get(s)>count){
+					if(downloadlist.get(s)>count
+							&&!top3list.contains(s+" "+downloadlist.get(s))){
 						count=downloadlist.get(s);
 						filename = s;
 					}
 				}
-				keyset.remove(filename);
+				//keyset.remove(filename);
 				if(filename!=null&&!top3list.contains(filename+" "+count)){
 					top3list.add(filename+" "+count);
 					//returnstring += stringcounter+". "+filename+" "+count;
