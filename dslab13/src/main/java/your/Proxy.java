@@ -3,6 +3,7 @@ package your;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -458,17 +459,20 @@ public class Proxy implements IProxyCli, Runnable {
 						else outputs.writeObject(new MessageResponse("Please log in first."));
 					}*/
 				}
+//			}
+//			catch (EOFException e){
+//						
 			}catch (IOException e) {
 				try {
 					if(currentUser!=null){
 						logout();
 					}
 					clientChannel.close();
-					Thread.currentThread().interrupt();
+//					Thread.currentThread().interrupt();
 				} catch (IOException e1) {
 					e1.printStackTrace();
 				}
-				e.printStackTrace();
+				//e.printStackTrace();
 			} catch (ClassNotFoundException e) {
 				e.printStackTrace();
 				System.out.println("Message Object-Class not recognized.");
@@ -874,7 +878,7 @@ public class Proxy implements IProxyCli, Runnable {
 		public String getTopThreeDownloads(){
 			//return downloadlist;
 			ArrayList<String> top3list = new ArrayList<String>();
-			Set<String> keyset = downloadlist.keySet();
+			ArrayList<String> keyset = new ArrayList<String>(downloadlist.keySet());
 			String filename;
 			String returnstring = "Top Three Downloads:";
 			int count;

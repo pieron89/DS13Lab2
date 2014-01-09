@@ -379,8 +379,8 @@ public class Client implements Runnable,IClientCli{
 			} catch (ClassNotFoundException e) {
 				e.printStackTrace();
 			} catch (NullPointerException e) {
-				System.out.println("Proxy offline, restart Client.");
-				exit();
+				System.out.println("File not Found.");
+//				exit();
 			} catch (SocketException e){
 				System.out.println("Proxy offline, restart Client.");
 				exit();
