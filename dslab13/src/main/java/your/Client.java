@@ -131,7 +131,7 @@ public class Client implements Runnable,IClientCli{
 	 */
 	@Override
 	public LoginResponse login(String username, String password) throws IOException {
-		return null;
+		return login(username);
 	}
 
 	@Command
