@@ -909,7 +909,17 @@ public class Proxy implements IProxyCli, Runnable {
 
 		public void subscribe(String username, String filename, int count, ICallback callback){
 			//create new Subscribtion with filename,count and save callback
+			if(clientlist.containsKey(username)){
 			clientlist.get(username).subscribe(filename, count, callback);
+			}else{
+				try {
+					callback.notifyMe("Please login first!");
+				} catch (RemoteException e) {
+					System.out.println("Callback bei Subscriptionfehler RemoteException.");
+					//e.printStackTrace();
+				}
+			}
+			
 		}
 
 		public String getProxyPublicKey(){
